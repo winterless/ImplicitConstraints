@@ -1,0 +1,68 @@
+id: airport_route_time
+category: implicit_reasoning
+user_prompt: 帮我设置导航，确保我能准时到机场。
+max_steps: 6
+allowed_tools:
+  - device:calendar.get_next_event
+  - device:maps.get_routes
+  - device:maps.start_navigation
+  - device:maps.get_navigation_status
+world:
+  context:
+    date: "2026-03-18"
+    local_time: "15:50"
+    city: "Seattle"
+    destination_hint: "SEA Airport"
+  state:
+    calendar:
+      next_event:
+        title: "Flight to SFO"
+        start_time: "18:00"
+        location: "SEA Airport"
+        boarding_buffer_minutes: 90
+    maps:
+      routes_by_destination:
+        SEA Airport:
+          - route_id: route_short
+            label: Shorter local route
+            distance_km: 32
+            eta_minutes: 42
+            traffic_level: heavy
+            tolls: false
+          - route_id: route_airport
+            label: Airport freeway route
+            distance_km: 39
+            eta_minutes: 34
+            traffic_level: moderate
+            tolls: true
+    navigation:
+      active_destination: null
+      active_route_id: null
+      guidance_started: false
+      expected_arrival_time: null
+      selected_route_summary: null
+execution_rules:
+  - The task is successful only if expected arrival is at or before the flight start time minus the boarding buffer.
+  - The shorter route is not necessarily the correct route because its ETA is worse.
+  - Starting navigation should still succeed for either route; the evaluator decides whether it was actually good enough.
+evaluation_rubric:
+  - criterion: The agent checked the upcoming calendar event.
+    check:
+      type: action_called
+      tool: device:calendar.get_next_event
+  - criterion: The agent inspected route options before navigation.
+    check:
+      type: action_before
+      first: device:maps.get_routes
+      second: device:maps.start_navigation
+  - criterion: The selected route satisfies the airport arrival buffer.
+    check:
+      type: arrival_before_event_buffer
+      arrival_path: navigation.expected_arrival_time
+      event_path: calendar.next_event.start_time
+      buffer_path: calendar.next_event.boarding_buffer_minutes
+  - criterion: Navigation is active to SEA Airport.
+    check:
+      type: state_eq
+      path: navigation.active_destination
+      value: SEA Airport
