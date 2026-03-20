@@ -198,7 +198,7 @@ summary:
 
 ```json
 {
-  "server": "mock-ios",
+  "server": "device",
   "tool_name": "alarm.create",
   "description": "Create a new alarm",
   "input_schema": {
@@ -617,7 +617,7 @@ implicit-constraints/
 
 1. 建仓库目录和 Python 项目骨架。
 2. 定义 scenario schema 和 run artifact schema。
-3. 先定义一套最小 `mock-ios` MCP 工具：
+3. 先定义一套最小 `device` MCP 工具：
    - alarm CRUD
    - calendar CRUD
    - weather query

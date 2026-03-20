@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 from .schemas import ToolDescriptor, load_yaml
 
@@ -12,19 +13,10 @@ class ToolRegistry:
     @classmethod
     def from_directory(cls, directory: str | Path) -> "ToolRegistry":
         descriptors: dict[str, ToolDescriptor] = {}
-        for path in sorted(Path(directory).glob("*.yaml")):
+        for path in sorted(Path(directory).rglob("*.yaml")):
             raw = load_yaml(path)
-            descriptor = ToolDescriptor(
-                server=raw["server"],
-                tool_name=raw["tool_name"],
-                description=raw["description"],
-                input_schema=raw.get("input_schema", {}),
-                read_only=bool(raw.get("read_only", False)),
-                success_response_schema=raw.get("success_response_schema", {}),
-                state_changes=list(raw.get("state_changes", [])),
-                failure_conditions=list(raw.get("failure_conditions", [])),
-            )
-            descriptors[descriptor.key] = descriptor
+            for descriptor in _load_descriptors(raw):
+                descriptors[descriptor.key] = descriptor
         return cls(descriptors)
 
     def get(self, key: str) -> ToolDescriptor:
@@ -46,3 +38,31 @@ class ToolRegistry:
                 }
             )
         return result
+
+
+def _load_descriptors(raw: dict[str, Any]) -> list[ToolDescriptor]:
+    if "tool_name" in raw:
+        return [_build_descriptor(raw)]
+
+    if "tools" in raw:
+        server = str(raw["server"])
+        return [_build_descriptor(item, default_server=server) for item in raw["tools"]]
+
+    raise ValueError("Unsupported tool descriptor file format.")
+
+
+def _build_descriptor(raw: dict[str, Any], default_server: str | None = None) -> ToolDescriptor:
+    server = str(raw.get("server") or default_server or "")
+    if not server:
+        raise ValueError("Missing server in tool descriptor.")
+    return ToolDescriptor(
+        server=server,
+        tool_name=raw["tool_name"],
+        description=raw["description"],
+        input_schema=raw.get("input_schema", {}),
+        read_only=bool(raw.get("read_only", False)),
+        success_response_schema=raw.get("success_response_schema", {}),
+        returns=raw.get("returns"),
+        state_changes=list(raw.get("state_changes", [])),
+        failure_conditions=list(raw.get("failure_conditions", [])),
+    )

@@ -15,6 +15,7 @@ class ToolDescriptor:
     input_schema: dict[str, Any]
     read_only: bool
     success_response_schema: dict[str, Any]
+    returns: dict[str, Any] | str | None = None
     state_changes: list[str] = field(default_factory=list)
     failure_conditions: list[str] = field(default_factory=list)
 
@@ -40,6 +41,7 @@ class ToolResult:
     message: str
     data: dict[str, Any]
     state_changes: dict[str, Any]
+    model_log: dict[str, Any] | None = None
 
 
 @dataclass(slots=True)

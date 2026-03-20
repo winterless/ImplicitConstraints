@@ -7,7 +7,7 @@ from .agent import AgentMemory, BaseAgent
 from .evaluator import ScenarioEvaluator
 from .schemas import AgentDecision, Scenario
 from .tool_registry import ToolRegistry
-from .world import MockWorld
+from .world import BaseWorld, MockWorld
 
 
 class ScenarioOrchestrator:
@@ -16,18 +16,21 @@ class ScenarioOrchestrator:
         scenario: Scenario,
         registry: ToolRegistry,
         agent: BaseAgent,
+        world: BaseWorld | None = None,
         evaluator: ScenarioEvaluator | None = None,
     ) -> None:
         self.scenario = scenario
         self.registry = registry
         self.agent = agent
+        self.world = world
         self.evaluator = evaluator or ScenarioEvaluator()
 
     def run(self) -> dict[str, Any]:
-        world = MockWorld(self.scenario, self.registry)
+        world = self.world or MockWorld(self.scenario, self.registry)
         memory = AgentMemory()
         messages: list[dict[str, Any]] = [self._user_message()]
         model_logs: list[dict[str, Any]] = []
+        world_logs: list[dict[str, Any]] = []
         available_tools = self.registry.export_for_keys(self.scenario.allowed_tools)
         last_step = 0
 
@@ -49,8 +52,9 @@ class ScenarioOrchestrator:
                 raise ValueError("Agent decision must include a tool call or task_complete=True")
 
             result = world.execute(decision.tool_call)
+            if result.model_log is not None:
+                world_logs.append({"step": step, **result.model_log})
             self.agent.observe(memory, decision.tool_call, result)
-            messages.append(self._tool_message(step, decision, result))
             messages.append(self._world_message(step, decision, result))
 
         final_state = world.snapshot_state()
@@ -63,9 +67,11 @@ class ScenarioOrchestrator:
             "input_snapshot": {
                 "context": self.scenario.context,
                 "allowed_tools": available_tools,
+                "world_mode": getattr(world, "mode", "unknown"),
             },
             "messages": messages,
             "model_logs": model_logs,
+            "world_logs": world_logs,
             "final_world_state": final_state,
             "evaluation": evaluation,
         }
@@ -88,24 +94,6 @@ class ScenarioOrchestrator:
             payload["tool_call"] = asdict(decision.tool_call)
         return payload
 
-    def _tool_message(
-        self,
-        step: int,
-        decision: AgentDecision,
-        result: Any,
-    ) -> dict[str, Any]:
-        if decision.tool_call is None:
-            raise ValueError("Tool message requires a tool call.")
-        return {
-            "step": step,
-            "role": "tool",
-            "tool_key": decision.tool_call.key,
-            "tool_name": decision.tool_call.tool_name,
-            "success": result.success,
-            "message": result.message,
-            "data": result.data,
-        }
-
     def _world_message(
         self,
         step: int,
@@ -117,7 +105,12 @@ class ScenarioOrchestrator:
         return {
             "step": step,
             "role": "world",
-            "applied_from": decision.tool_call.key,
+            "tool_key": decision.tool_call.key,
+            "tool_name": decision.tool_call.tool_name,
+            "arguments": dict(decision.tool_call.arguments),
+            "success": result.success,
+            "message": result.message,
+            "data": result.data,
             "state_changes": result.state_changes,
         }
 

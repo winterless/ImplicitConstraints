@@ -5,7 +5,7 @@
 - MCP 风格的 mock 工具接口
 - 单场景 YAML 加载
 - 可插拔 agent
-- deterministic world model
+- 可切换的 world model（deterministic mock / LLM world model）
 - criterion-level evaluator
 - 一个 `route + time` 的完整 demo
 
@@ -33,7 +33,25 @@ python -m pip install -e .
 ## 运行
 
 ```bash
-python -m implicit_constraints_demo.main --scenario data/scenarios/airport_route_time.yaml
+python -m implicit_constraints_demo.main \
+  --scenario data/scenarios/airport_route_time.yaml \
+  --world-mode mock
+```
+
+如果你想强制使用本地 deterministic world：
+
+```bash
+python -m implicit_constraints_demo.main \
+  --scenario data/scenarios/airport_route_time.yaml \
+  --world-mode mock
+```
+
+如果已经配置了 API key，并希望更贴近论文里的 Agent-as-a-World 设计，可以让 world 也由单独的 LLM 来模拟：
+
+```bash
+python -m implicit_constraints_demo.main \
+  --scenario data/scenarios/airport_route_time.yaml \
+  --world-mode llm
 ```
 
 默认会把完整运行结果保存到：
@@ -47,6 +65,7 @@ runs/airport_route_time.json
 ```bash
 python -m implicit_constraints_demo.main \
   --scenario data/scenarios/airport_route_time.yaml \
+  --world-mode mock \
   --output runs/custom
 ```
 
@@ -54,6 +73,25 @@ python -m implicit_constraints_demo.main \
 
 ```text
 runs/custom/airport_route_time.json
+```
+
+如果不传 `--scenario`，会自动扫描 `data/scenarios/` 下所有可执行场景并批量运行，跳过像 catalog 这类不可执行 YAML：
+
+```bash
+python -m implicit_constraints_demo.main \
+  --world-mode mock
+```
+
+默认批量结果会输出到：
+
+```text
+runs/batch/
+```
+
+其中每个场景一个结果文件，另外还会生成：
+
+```text
+runs/batch/_summary.json
 ```
 
 ## 模型 API
@@ -72,7 +110,7 @@ API key 读取顺序：
 
 `.secrets/` 已加入 `.gitignore`，避免误提交密钥。
 
-如果没有配置 API key，CLI 会自动回退到本地 heuristic agent，方便直接跑通 demo。
+如果没有配置 API key，可以配合 `--world-mode mock` 使用；若选择 `--world-mode llm`，CLI 会直接报错而不是自动回退。`--world-mode` 现在必须显式传入。
 
 ## 目录结构
 

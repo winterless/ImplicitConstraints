@@ -13,11 +13,11 @@ class ScenarioEvaluator:
         messages: list[dict[str, Any]],
         final_state: dict[str, Any],
     ) -> dict[str, Any]:
-        tool_messages = _tool_messages(messages)
+        execution_messages = _execution_messages(messages)
         results = []
         passed_count = 0
         for item in scenario.rubric:
-            passed, reasoning = self._evaluate_item(item["check"], tool_messages, final_state)
+            passed, reasoning = self._evaluate_item(item["check"], execution_messages, final_state)
             if passed:
                 passed_count += 1
             results.append(
@@ -43,18 +43,18 @@ class ScenarioEvaluator:
     def _evaluate_item(
         self,
         check: dict[str, Any],
-        tool_messages: list[dict[str, Any]],
+        execution_messages: list[dict[str, Any]],
         final_state: dict[str, Any],
     ) -> tuple[bool, str]:
         kind = check["type"]
         if kind == "action_called":
             tool = check["tool"]
-            passed = any(entry["tool_key"] == tool for entry in tool_messages)
+            passed = any(entry["tool_key"] == tool for entry in execution_messages)
             return passed, f"Tool {tool} {'was' if passed else 'was not'} called."
 
         if kind == "action_before":
-            first_index = _first_index(tool_messages, check["first"])
-            second_index = _first_index(tool_messages, check["second"])
+            first_index = _first_index(execution_messages, check["first"])
+            second_index = _first_index(execution_messages, check["second"])
             passed = first_index is not None and second_index is not None and first_index < second_index
             return passed, (
                 f"First tool index={first_index}, second tool index={second_index}; "
@@ -87,12 +87,12 @@ def _resolve_path(data: dict[str, Any], path: str) -> Any:
     return current
 
 
-def _tool_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    return [message for message in messages if message.get("role") == "tool"]
+def _execution_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [message for message in messages if message.get("role") == "world" and "tool_key" in message]
 
 
-def _first_index(tool_messages: list[dict[str, Any]], tool_key: str) -> int | None:
-    for idx, entry in enumerate(tool_messages):
+def _first_index(execution_messages: list[dict[str, Any]], tool_key: str) -> int | None:
+    for idx, entry in enumerate(execution_messages):
         if entry["tool_key"] == tool_key:
             return idx
     return None
