@@ -1,0 +1,167 @@
+{
+  "status": "failed",
+  "scenario_id": "airport_route_time",
+  "category": "implicit_reasoning",
+  "user_prompt": "帮我设置导航，确保我能准时到机场。",
+  "input_snapshot": {
+    "context": {
+      "date": "2026-03-18",
+      "local_time": "15:50",
+      "city": "Seattle",
+      "destination_hint": "SEA Airport"
+    },
+    "allowed_tools": [
+      {
+        "server": "device",
+        "tool_name": "calendar.get_next_event",
+        "description": "Get the next scheduled calendar event.",
+        "input_schema": {
+          "type": "object",
+          "properties": {},
+          "required": []
+        },
+        "read_only": true
+      },
+      {
+        "server": "device",
+        "tool_name": "maps.get_routes",
+        "description": "Get available route options for a destination.",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "destination": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "destination"
+          ]
+        },
+        "read_only": true
+      },
+      {
+        "server": "device",
+        "tool_name": "maps.start_navigation",
+        "description": "Start navigation to a destination using a selected route.",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "destination": {
+              "type": "string"
+            },
+            "route_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "destination",
+            "route_id"
+          ]
+        },
+        "read_only": false
+      },
+      {
+        "server": "device",
+        "tool_name": "maps.get_navigation_status",
+        "description": "Get the current navigation status.",
+        "input_schema": {
+          "type": "object",
+          "properties": {},
+          "required": []
+        },
+        "read_only": true
+      }
+    ],
+    "agent_mode": "llm",
+    "world_mode": "llm_world_model",
+    "evaluator_mode": "llm"
+  },
+  "messages": [
+    {
+      "step": 0,
+      "role": "user",
+      "content": "帮我设置导航，确保我能准时到机场。"
+    }
+  ],
+  "model_logs": [],
+  "world_logs": [],
+  "final_world_state": {
+    "calendar": {
+      "next_event": {
+        "title": "Flight to SFO",
+        "start_time": "18:00",
+        "location": "SEA Airport",
+        "boarding_buffer_minutes": 90
+      }
+    },
+    "maps": {
+      "routes_by_destination": {
+        "SEA Airport": [
+          {
+            "route_id": "route_short",
+            "label": "Shorter local route",
+            "distance_km": 32,
+            "eta_minutes": 42,
+            "traffic_level": "heavy",
+            "tolls": false
+          },
+          {
+            "route_id": "route_airport",
+            "label": "Airport freeway route",
+            "distance_km": 39,
+            "eta_minutes": 34,
+            "traffic_level": "moderate",
+            "tolls": true
+          }
+        ]
+      }
+    },
+    "navigation": {
+      "active_destination": null,
+      "active_route_id": null,
+      "guidance_started": false,
+      "expected_arrival_time": null,
+      "selected_route_summary": null
+    }
+  },
+  "evaluation": null,
+  "error": "Chat API failed: HTTP Error 503: Service Unavailable",
+  "runtime_config": {
+    "agent": {
+      "mode": "llm",
+      "provider": "local_openai_compatible",
+      "base_url": "http://127.0.0.1:9999/v1",
+      "model": "/home/unlimitediw/workspace/models/Qwen3-30B-A3B-GPTQ-Int4",
+      "api_key_env": "",
+      "api_key_file": "",
+      "require_api_key": false,
+      "timeout_s": 120,
+      "retries": 2,
+      "temperature": 0.0
+    },
+    "world": {
+      "mode": "llm",
+      "provider": "openai_compatible",
+      "base_url": "http://127.0.0.1:9999/v1",
+      "model": "qwen-plus",
+      "api_key_env": "DASHSCOPE_API_KEY,ALIYUN_API_KEY",
+      "api_key_file": ".secrets/alicloud_api_key.txt",
+      "require_api_key": false,
+      "timeout_s": 120,
+      "retries": 2,
+      "temperature": 0.0
+    },
+    "evaluator": {
+      "mode": "llm",
+      "provider": "openai_compatible",
+      "base_url": "http://127.0.0.1:9999/v1",
+      "model": "qwen-plus",
+      "api_key_env": "DASHSCOPE_API_KEY,ALIYUN_API_KEY",
+      "api_key_file": ".secrets/alicloud_api_key.txt",
+      "require_api_key": false,
+      "timeout_s": 120,
+      "retries": 2,
+      "temperature": 0.0
+    }
+  }
+}

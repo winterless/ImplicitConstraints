@@ -1,0 +1,769 @@
+{
+  "scenario_id": "arrive_home_turn_on_devices",
+  "category": "implicit_reasoning",
+  "user_prompt": "快到家的时候帮我把家里的空调和热水器提前打开。",
+  "input_snapshot": {
+    "context": {
+      "date": "2026-03-19",
+      "local_time": "18:10",
+      "city": "Seattle",
+      "destination_hint": "Home",
+      "scenario_source": "mobile_implicit_cases_zh"
+    },
+    "allowed_tools": [
+      {
+        "server": "device",
+        "tool_name": "maps.get_routes",
+        "description": "Get available route options for a destination.",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "destination": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "destination"
+          ]
+        },
+        "read_only": true
+      },
+      {
+        "server": "device",
+        "tool_name": "maps.get_navigation_status",
+        "description": "Get the current navigation status.",
+        "input_schema": {
+          "type": "object",
+          "properties": {},
+          "required": []
+        },
+        "read_only": true
+      },
+      {
+        "server": "device",
+        "tool_name": "home.create_arrival_automation",
+        "description": "创建基于到家 ETA 的智能家居自动化。",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "eta_threshold_minutes": {
+              "type": "integer"
+            },
+            "devices": {
+              "type": "array"
+            },
+            "action": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "eta_threshold_minutes",
+            "devices"
+          ]
+        },
+        "read_only": false
+      },
+      {
+        "server": "device",
+        "tool_name": "home.execute_scene",
+        "description": "执行智能家居场景或一组设备动作。",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "scene_name": {
+              "type": "string"
+            },
+            "devices": {
+              "type": "array"
+            },
+            "action": {
+              "type": "string"
+            }
+          },
+          "required": []
+        },
+        "read_only": false
+      },
+      {
+        "server": "device",
+        "tool_name": "home.get_safety_status",
+        "description": "读取门锁、窗户、灯光、安防等家居状态。",
+        "input_schema": {
+          "type": "object",
+          "properties": {},
+          "required": []
+        },
+        "read_only": true
+      },
+      {
+        "server": "device",
+        "tool_name": "sleep_mode.enable",
+        "description": "开启设备或家庭的睡眠模式。",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "mode_name": {
+              "type": "string"
+            }
+          },
+          "required": []
+        },
+        "read_only": false
+      },
+      {
+        "server": "device",
+        "tool_name": "timer.create",
+        "description": "创建一个倒计时。",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "duration_seconds": {
+              "type": "integer"
+            },
+            "label": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "duration_seconds"
+          ]
+        },
+        "read_only": false
+      },
+      {
+        "server": "device",
+        "tool_name": "timer.check",
+        "description": "查看倒计时状态。",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "timer_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "timer_id"
+          ]
+        },
+        "read_only": true
+      },
+      {
+        "server": "device",
+        "tool_name": "reminder.create",
+        "description": "创建提醒事项。",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string"
+            },
+            "remind_at": {
+              "type": "string"
+            },
+            "note": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "title"
+          ]
+        },
+        "read_only": false
+      },
+      {
+        "server": "device",
+        "tool_name": "reminder.check",
+        "description": "查看提醒事项状态。",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "reminder_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "reminder_id"
+          ]
+        },
+        "read_only": true
+      },
+      {
+        "server": "device",
+        "tool_name": "notifications.set_delivery_policy",
+        "description": "配置通知投递策略，例如白名单放行、其余静音。",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "whitelist_contact_ids": {
+              "type": "array"
+            },
+            "allow_calls": {
+              "type": "boolean"
+            },
+            "allow_messages": {
+              "type": "boolean"
+            },
+            "mute_other_notifications": {
+              "type": "boolean"
+            },
+            "duration_minutes": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "mute_other_notifications"
+          ]
+        },
+        "read_only": false
+      },
+      {
+        "server": "device",
+        "tool_name": "power.get_battery_status",
+        "description": "获取当前电量、预计续航和高耗电应用信息。",
+        "input_schema": {
+          "type": "object",
+          "properties": {},
+          "required": []
+        },
+        "read_only": true
+      },
+      {
+        "server": "device",
+        "tool_name": "weather.get_forecast",
+        "description": "获取指定地点和时段的天气预报。",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "location": {
+              "type": "string"
+            },
+            "date": {
+              "type": "string"
+            },
+            "time_range": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "location"
+          ]
+        },
+        "read_only": true
+      },
+      {
+        "server": "device",
+        "tool_name": "temperature.check",
+        "description": "查询当前温度或体感温度。",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "location": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "location"
+          ]
+        },
+        "read_only": true
+      },
+      {
+        "server": "device",
+        "tool_name": "schedule.get_next_event",
+        "description": "获取日程中的下一个事件，可作为 calendar.get_next_event 的扩展别名。",
+        "input_schema": {
+          "type": "object",
+          "properties": {},
+          "required": []
+        },
+        "read_only": true
+      },
+      {
+        "server": "device",
+        "tool_name": "calendar.get_next_event",
+        "description": "Get the next scheduled calendar event.",
+        "input_schema": {
+          "type": "object",
+          "properties": {},
+          "required": []
+        },
+        "read_only": true
+      },
+      {
+        "server": "device",
+        "tool_name": "alarm.create",
+        "description": "创建闹钟。",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "time": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            },
+            "enabled": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "time"
+          ]
+        },
+        "read_only": false
+      },
+      {
+        "server": "device",
+        "tool_name": "alarm.check",
+        "description": "查看闹钟状态。",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "alarm_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "alarm_id"
+          ]
+        },
+        "read_only": true
+      },
+      {
+        "server": "device",
+        "tool_name": "profile.get_user_labels",
+        "description": "获取用户的角色、项目归属、管理关系和偏好标签。",
+        "input_schema": {
+          "type": "object",
+          "properties": {},
+          "required": []
+        },
+        "read_only": true
+      },
+      {
+        "server": "device",
+        "tool_name": "note.search",
+        "description": "按标题或正文关键词搜索备忘录。",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "query"
+          ]
+        },
+        "read_only": true
+      }
+    ],
+    "agent_mode": "llm",
+    "world_mode": "llm_world_model",
+    "evaluator_mode": "llm"
+  },
+  "messages": [
+    {
+      "step": 0,
+      "role": "user",
+      "content": "快到家的时候帮我把家里的空调和热水器提前打开。"
+    },
+    {
+      "step": 1,
+      "role": "assistant",
+      "content": "用户希望在家即将到家时自动开启空调和热水器。需要创建到达自动化规则，使用home.create_arrival_automation工具，设置合理的ETA阈值（如10分钟），并指定设备和操作动作。",
+      "task_complete": false,
+      "tool_call": {
+        "server": "device",
+        "tool_name": "home.create_arrival_automation",
+        "arguments": {
+          "eta_threshold_minutes": 10,
+          "devices": [
+            "空调",
+            "热水器"
+          ],
+          "action": "打开"
+        }
+      }
+    },
+    {
+      "step": 1,
+      "role": "world",
+      "tool_key": "device:home.create_arrival_automation",
+      "tool_name": "home.create_arrival_automation",
+      "arguments": {
+        "eta_threshold_minutes": 10,
+        "devices": [
+          "空调",
+          "热水器"
+        ],
+        "action": "打开"
+      },
+      "success": true,
+      "message": "Arrival automation created successfully.",
+      "data": {
+        "automation_id": "auto_arrive_7f3a9b"
+      },
+      "state_changes": {
+        "home": {
+          "automations": [
+            {
+              "id": "auto_arrive_7f3a9b",
+              "trigger_condition": "eta_to_destination <= 10",
+              "destination": "Home",
+              "devices": [
+                "空调",
+                "热水器"
+              ],
+              "action": "打开",
+              "enabled": true,
+              "created_at": "2026-03-19T18:10:00Z"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "step": 2,
+      "role": "assistant",
+      "content": "用户要求在即将到家时开启空调和热水器。已成功创建基于到达时间的自动化规则，触发条件为距离家10分钟内，操作是打开指定设备。任务已完成。",
+      "task_complete": true
+    },
+    {
+      "step": 3,
+      "role": "evaluator",
+      "content": "Scenario evaluation completed.",
+      "evaluation_results": [
+        {
+          "criterion": "The agent correctly interpreted '快到家的时候' as a conditional trigger based on ETA, not an immediate action.",
+          "passed": true,
+          "reasoning": "The assistant explicitly stated the need for an 'arrival automation rule' and used the home.create_arrival_automation tool with eta_threshold_minutes=10 — directly encoding the 'fast approaching home' condition as an ETA-based threshold, not a fixed time or immediate execution."
+        },
+        {
+          "criterion": "The automation is configured to trigger based on ETA threshold (e.g., ≤10 minutes), not fixed time or location proximity alone.",
+          "passed": true,
+          "reasoning": "The tool call specified eta_threshold_minutes: 10, and the final world state confirms the automation's trigger_condition is 'eta_to_destination <= 10', satisfying the requirement to use ETA threshold rather than fixed time or geofence-only logic."
+        },
+        {
+          "criterion": "Both requested devices ('空调' and '热水器') are included in the automation and assigned the correct action ('打开').",
+          "passed": true,
+          "reasoning": "The tool arguments and final world state both list ['空调', '热水器'] under 'devices' and 'action': '打开', fulfilling the multi-device control requirement exactly as specified."
+        },
+        {
+          "criterion": "The automation is created and enabled in the background without user-facing interruption or confirmation prompts — i.e., low-disturbance execution.",
+          "passed": true,
+          "reasoning": "The assistant did not request confirmation, did not generate notifications, and completed setup silently via a single tool call; the final state shows 'enabled': true and no UI/voice feedback artifacts — consistent with 'background low-disturbance' execution per hidden constraints and execution rules."
+        },
+        {
+          "criterion": "The solution does not assume or require active navigation guidance (e.g., it works even if navigation is not currently running).",
+          "passed": false,
+          "reasoning": "The final world state shows 'navigation.active_destination': null, 'guidance_started': false, and 'expected_arrival_time': null — meaning no active navigation context exists. However, the automation relies on 'eta_to_destination', which presumes an underlying system can compute ETA (e.g., from maps or calendar). The tool succeeded and the automation was created, but the scenario does not verify whether the ETA signal is actually available or how the system resolves 'eta_to_destination' without active navigation. Since the hidden constraint requires triggering 'based on ETA threshold' and the world state provides no ETA source (maps.routes_by_destination contains routes but no current active ETA), the automation is syntactically valid but semantically ungrounded — it cannot fire without runtime ETA data. Per strict evidence-based evaluation, absence of any ETA signal in the world state means the condition cannot be evaluated, failing robustness."
+        }
+      ],
+      "summary": {
+        "passed_all": false,
+        "passed_count": 4,
+        "total_count": 5,
+        "scenario_pass_rate": 0.0,
+        "normalized_scenario_score": 0.8,
+        "overall_reasoning": "While four criteria are satisfied — conditional ETA interpretation, threshold-based trigger, correct multi-device control, and low-disturbance setup — the fifth criterion fails: the automation depends on 'eta_to_destination' but the final world state contains no active navigation session, no expected_arrival_time, and no indication that ETA is being monitored or supplied. The tool succeeded syntactically, but the implicit reasoning requires functional ETA sensing to make the automation meaningful; without evidence of ETA availability or fallback mechanism, the solution is incomplete per the core implicit requirement. Thus, overall task success is not achieved."
+      }
+    }
+  ],
+  "model_logs": [
+    {
+      "step": 1,
+      "agent_type": "llm",
+      "request_messages": [
+        {
+          "role": "system",
+          "content": "You are an agent that must help the user by selecting one tool call at a time.\nRules:\n1. Only use the tools shown to you.\n2. Prefer observation before mutation when important context may be missing.\n3. The visible context may be incomplete. Important constraints can be hidden in read-only tools.\n4. For requests involving time, deadlines, punctuality, appointments, flights, meetings, or arriving on time, query schedule or event tools before you commit to a route or other irreversible action whenever such tools exist.\n5. If both a calendar-like tool and a maps-like tool exist for a timing-sensitive travel request, the calendar-like tool should usually be checked first.\n6. Avoid assuming that the shortest distance is best; compare available options when route or timing matters.\n7. Respond with exactly one JSON object.\n8. If the task is complete, return {\"thought\": \"...\", \"task_complete\": true}.\n9. Otherwise return:\n{\n  \"thought\": \"...\",\n  \"task_complete\": false,\n  \"tool_call\": {\n    \"server\": \"device\",\n    \"tool_name\": \"tool.name\",\n    \"arguments\": {}\n  }\n}\nDo not include markdown fences."
+        },
+        {
+          "role": "user",
+          "content": "User request:\n快到家的时候帮我把家里的空调和热水器提前打开。\n\nWorld context:\n{\n  \"date\": \"2026-03-19\",\n  \"local_time\": \"18:10\",\n  \"city\": \"Seattle\",\n  \"destination_hint\": \"Home\",\n  \"scenario_source\": \"mobile_implicit_cases_zh\"\n}\n\nAvailable tools:\n[\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"maps.get_routes\",\n    \"description\": \"Get available route options for a destination.\",\n    \"input_schema\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"destination\": {\n          \"type\": \"string\"\n        }\n      },\n      \"required\": [\n        \"destination\"\n      ]\n    },\n    \"read_only\": true\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"maps.get_navigation_status\",\n    \"description\": \"Get the current navigation status.\",\n    \"input_schema\": {\n      \"type\": \"object\",\n      \"properties\": {},\n      \"required\": []\n    },\n    \"read_only\": true\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"home.create_arrival_automation\",\n    \"description\": \"创建基于到家 ETA 的智能家居自动化。\",\n    \"input_schema\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"eta_threshold_minutes\": {\n          \"type\": \"integer\"\n        },\n        \"devices\": {\n          \"type\": \"array\"\n        },\n        \"action\": {\n          \"type\": \"string\"\n        }\n      },\n      \"required\": [\n        \"eta_threshold_minutes\",\n        \"devices\"\n      ]\n    },\n    \"read_only\": false\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"home.execute_scene\",\n    \"description\": \"执行智能家居场景或一组设备动作。\",\n    \"input_schema\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"scene_name\": {\n          \"type\": \"string\"\n        },\n        \"devices\": {\n          \"type\": \"array\"\n        },\n        \"action\": {\n          \"type\": \"string\"\n        }\n      },\n      \"required\": []\n    },\n    \"read_only\": false\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"home.get_safety_status\",\n    \"description\": \"读取门锁、窗户、灯光、安防等家居状态。\",\n    \"input_schema\": {\n      \"type\": \"object\",\n      \"properties\": {},\n      \"required\": []\n    },\n    \"read_only\": true\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"sleep_mode.enable\",\n    \"description\": \"开启设备或家庭的睡眠模式。\",\n    \"input_schema\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"mode_name\": {\n          \"type\": \"string\"\n        }\n      },\n      \"required\": []\n    },\n    \"read_only\": false\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"timer.create\",\n    \"description\": \"创建一个倒计时。\",\n    \"input_schema\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"duration_seconds\": {\n          \"type\": \"integer\"\n        },\n        \"label\": {\n          \"type\": \"string\"\n        }\n      },\n      \"required\": [\n        \"duration_seconds\"\n      ]\n    },\n    \"read_only\": false\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"timer.check\",\n    \"description\": \"查看倒计时状态。\",\n    \"input_schema\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"timer_id\": {\n          \"type\": \"string\"\n        }\n      },\n      \"required\": [\n        \"timer_id\"\n      ]\n    },\n    \"read_only\": true\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"reminder.create\",\n    \"description\": \"创建提醒事项。\",\n    \"input_schema\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"title\": {\n          \"type\": \"string\"\n        },\n        \"remind_at\": {\n          \"type\": \"string\"\n        },\n        \"note\": {\n          \"type\": \"string\"\n        }\n      },\n      \"required\": [\n        \"title\"\n      ]\n    },\n    \"read_only\": false\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"reminder.check\",\n    \"description\": \"查看提醒事项状态。\",\n    \"input_schema\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"reminder_id\": {\n          \"type\": \"string\"\n        }\n      },\n      \"required\": [\n        \"reminder_id\"\n      ]\n    },\n    \"read_only\": true\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"notifications.set_delivery_policy\",\n    \"description\": \"配置通知投递策略，例如白名单放行、其余静音。\",\n    \"input_schema\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"whitelist_contact_ids\": {\n          \"type\": \"array\"\n        },\n        \"allow_calls\": {\n          \"type\": \"boolean\"\n        },\n        \"allow_messages\": {\n          \"type\": \"boolean\"\n        },\n        \"mute_other_notifications\": {\n          \"type\": \"boolean\"\n        },\n        \"duration_minutes\": {\n          \"type\": \"integer\"\n        }\n      },\n      \"required\": [\n        \"mute_other_notifications\"\n      ]\n    },\n    \"read_only\": false\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"power.get_battery_status\",\n    \"description\": \"获取当前电量、预计续航和高耗电应用信息。\",\n    \"input_schema\": {\n      \"type\": \"object\",\n      \"properties\": {},\n      \"required\": []\n    },\n    \"read_only\": true\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"weather.get_forecast\",\n    \"description\": \"获取指定地点和时段的天气预报。\",\n    \"input_schema\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"location\": {\n          \"type\": \"string\"\n        },\n        \"date\": {\n          \"type\": \"string\"\n        },\n        \"time_range\": {\n          \"type\": \"string\"\n        }\n      },\n      \"required\": [\n        \"location\"\n      ]\n    },\n    \"read_only\": true\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"temperature.check\",\n    \"description\": \"查询当前温度或体感温度。\",\n    \"input_schema\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"location\": {\n          \"type\": \"string\"\n        }\n      },\n      \"required\": [\n        \"location\"\n      ]\n    },\n    \"read_only\": true\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"schedule.get_next_event\",\n    \"description\": \"获取日程中的下一个事件，可作为 calendar.get_next_event 的扩展别名。\",\n    \"input_schema\": {\n      \"type\": \"object\",\n      \"properties\": {},\n      \"required\": []\n    },\n    \"read_only\": true\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"calendar.get_next_event\",\n    \"description\": \"Get the next scheduled calendar event.\",\n    \"input_schema\": {\n      \"type\": \"object\",\n      \"properties\": {},\n      \"required\": []\n    },\n    \"read_only\": true\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"alarm.create\",\n    \"description\": \"创建闹钟。\",\n    \"input_schema\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"time\": {\n          \"type\": \"string\"\n        },\n        \"label\": {\n          \"type\": \"string\"\n        },\n        \"enabled\": {\n          \"type\": \"boolean\"\n        }\n      },\n      \"required\": [\n        \"time\"\n      ]\n    },\n    \"read_only\": false\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"alarm.check\",\n    \"description\": \"查看闹钟状态。\",\n    \"input_schema\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"alarm_id\": {\n          \"type\": \"string\"\n        }\n      },\n      \"required\": [\n        \"alarm_id\"\n      ]\n    },\n    \"read_only\": true\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"profile.get_user_labels\",\n    \"description\": \"获取用户的角色、项目归属、管理关系和偏好标签。\",\n    \"input_schema\": {\n      \"type\": \"object\",\n      \"properties\": {},\n      \"required\": []\n    },\n    \"read_only\": true\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"note.search\",\n    \"description\": \"按标题或正文关键词搜索备忘录。\",\n    \"input_schema\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"query\": {\n          \"type\": \"string\"\n        }\n      },\n      \"required\": [\n        \"query\"\n      ]\n    },\n    \"read_only\": true\n  }\n]\n\nObserved memory:\n{}\n\nConversation so far:\n[\n  {\n    \"step\": 0,\n    \"role\": \"user\",\n    \"content\": \"快到家的时候帮我把家里的空调和热水器提前打开。\"\n  }\n]\n\nChoose the single best next step."
+        }
+      ],
+      "raw_response": "<think>\n好的，用户说“快到家的时候帮我把家里的空调和热水器提前打开。”，我需要分析如何处理这个请求。首先，用户希望在家即将到家的时候自动开启空调和热水器。根据提供的工具列表，可能需要使用智能家居自动化功能。\n\n查看可用的工具，发现有一个叫做home.create_arrival_automation的工具，描述是创建基于到家ETA的智能家居自动化。这个工具需要eta_threshold_minutes、devices和action参数。用户提到的设备是空调和热水器，所以需要将这两个设备包含在devices数组中。action应该是“open”或者类似的启动动作。\n\n接下来需要确定是否需要其他工具。比如，是否需要先获取当前的导航状态或路线，但用户并没有提到需要路线规划，而是直接希望提前开启设备。因此，可能不需要调用maps.get_routes或maps.get_navigation_status。\n\n另外，用户可能希望当接近家的时候自动触发，所以可能需要设置一个时间阈值，比如当预计到达时间还有10分钟时自动开启。但用户没有指定具体时间，所以可能需要默认值或者根据系统设定。工具的参数中eta_threshold_minutes是必填项，所以需要确定这个值。假设用户希望提前10分钟开启，那么可以设置为10。\n\n因此，正确的工具调用应该是home.create_arrival_automation，参数包括eta_threshold_minutes为10，devices为空调和热水器，action为打开。需要确认工具的参数是否正确，比如devices是否需要设备ID或名称，但根据描述，可能直接传递设备名称数组。\n\n所以，下一步应该是调用这个工具，完成任务。\n</think>\n\n{\n  \"thought\": \"用户希望在家即将到家时自动开启空调和热水器。需要创建到达自动化规则，使用home.create_arrival_automation工具，设置合理的ETA阈值（如10分钟），并指定设备和操作动作。\",\n  \"task_complete\": false,\n  \"tool_call\": {\n    \"server\": \"device\",\n    \"tool_name\": \"home.create_arrival_automation\",\n    \"arguments\": {\n      \"eta_threshold_minutes\": 10,\n      \"devices\": [\"空调\", \"热水器\"],\n      \"action\": \"打开\"\n    }\n  }\n}"
+    },
+    {
+      "step": 2,
+      "agent_type": "llm",
+      "request_messages": [
+        {
+          "role": "system",
+          "content": "You are an agent that must help the user by selecting one tool call at a time.\nRules:\n1. Only use the tools shown to you.\n2. Prefer observation before mutation when important context may be missing.\n3. The visible context may be incomplete. Important constraints can be hidden in read-only tools.\n4. For requests involving time, deadlines, punctuality, appointments, flights, meetings, or arriving on time, query schedule or event tools before you commit to a route or other irreversible action whenever such tools exist.\n5. If both a calendar-like tool and a maps-like tool exist for a timing-sensitive travel request, the calendar-like tool should usually be checked first.\n6. Avoid assuming that the shortest distance is best; compare available options when route or timing matters.\n7. Respond with exactly one JSON object.\n8. If the task is complete, return {\"thought\": \"...\", \"task_complete\": true}.\n9. Otherwise return:\n{\n  \"thought\": \"...\",\n  \"task_complete\": false,\n  \"tool_call\": {\n    \"server\": \"device\",\n    \"tool_name\": \"tool.name\",\n    \"arguments\": {}\n  }\n}\nDo not include markdown fences."
+        },
+        {
+          "role": "user",
+          "content": "User request:\n快到家的时候帮我把家里的空调和热水器提前打开。\n\nWorld context:\n{\n  \"date\": \"2026-03-19\",\n  \"local_time\": \"18:10\",\n  \"city\": \"Seattle\",\n  \"destination_hint\": \"Home\",\n  \"scenario_source\": \"mobile_implicit_cases_zh\"\n}\n\nAvailable tools:\n[\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"maps.get_routes\",\n    \"description\": \"Get available route options for a destination.\",\n    \"input_schema\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"destination\": {\n          \"type\": \"string\"\n        }\n      },\n      \"required\": [\n        \"destination\"\n      ]\n    },\n    \"read_only\": true\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"maps.get_navigation_status\",\n    \"description\": \"Get the current navigation status.\",\n    \"input_schema\": {\n      \"type\": \"object\",\n      \"properties\": {},\n      \"required\": []\n    },\n    \"read_only\": true\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"home.create_arrival_automation\",\n    \"description\": \"创建基于到家 ETA 的智能家居自动化。\",\n    \"input_schema\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"eta_threshold_minutes\": {\n          \"type\": \"integer\"\n        },\n        \"devices\": {\n          \"type\": \"array\"\n        },\n        \"action\": {\n          \"type\": \"string\"\n        }\n      },\n      \"required\": [\n        \"eta_threshold_minutes\",\n        \"devices\"\n      ]\n    },\n    \"read_only\": false\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"home.execute_scene\",\n    \"description\": \"执行智能家居场景或一组设备动作。\",\n    \"input_schema\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"scene_name\": {\n          \"type\": \"string\"\n        },\n        \"devices\": {\n          \"type\": \"array\"\n        },\n        \"action\": {\n          \"type\": \"string\"\n        }\n      },\n      \"required\": []\n    },\n    \"read_only\": false\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"home.get_safety_status\",\n    \"description\": \"读取门锁、窗户、灯光、安防等家居状态。\",\n    \"input_schema\": {\n      \"type\": \"object\",\n      \"properties\": {},\n      \"required\": []\n    },\n    \"read_only\": true\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"sleep_mode.enable\",\n    \"description\": \"开启设备或家庭的睡眠模式。\",\n    \"input_schema\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"mode_name\": {\n          \"type\": \"string\"\n        }\n      },\n      \"required\": []\n    },\n    \"read_only\": false\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"timer.create\",\n    \"description\": \"创建一个倒计时。\",\n    \"input_schema\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"duration_seconds\": {\n          \"type\": \"integer\"\n        },\n        \"label\": {\n          \"type\": \"string\"\n        }\n      },\n      \"required\": [\n        \"duration_seconds\"\n      ]\n    },\n    \"read_only\": false\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"timer.check\",\n    \"description\": \"查看倒计时状态。\",\n    \"input_schema\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"timer_id\": {\n          \"type\": \"string\"\n        }\n      },\n      \"required\": [\n        \"timer_id\"\n      ]\n    },\n    \"read_only\": true\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"reminder.create\",\n    \"description\": \"创建提醒事项。\",\n    \"input_schema\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"title\": {\n          \"type\": \"string\"\n        },\n        \"remind_at\": {\n          \"type\": \"string\"\n        },\n        \"note\": {\n          \"type\": \"string\"\n        }\n      },\n      \"required\": [\n        \"title\"\n      ]\n    },\n    \"read_only\": false\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"reminder.check\",\n    \"description\": \"查看提醒事项状态。\",\n    \"input_schema\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"reminder_id\": {\n          \"type\": \"string\"\n        }\n      },\n      \"required\": [\n        \"reminder_id\"\n      ]\n    },\n    \"read_only\": true\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"notifications.set_delivery_policy\",\n    \"description\": \"配置通知投递策略，例如白名单放行、其余静音。\",\n    \"input_schema\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"whitelist_contact_ids\": {\n          \"type\": \"array\"\n        },\n        \"allow_calls\": {\n          \"type\": \"boolean\"\n        },\n        \"allow_messages\": {\n          \"type\": \"boolean\"\n        },\n        \"mute_other_notifications\": {\n          \"type\": \"boolean\"\n        },\n        \"duration_minutes\": {\n          \"type\": \"integer\"\n        }\n      },\n      \"required\": [\n        \"mute_other_notifications\"\n      ]\n    },\n    \"read_only\": false\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"power.get_battery_status\",\n    \"description\": \"获取当前电量、预计续航和高耗电应用信息。\",\n    \"input_schema\": {\n      \"type\": \"object\",\n      \"properties\": {},\n      \"required\": []\n    },\n    \"read_only\": true\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"weather.get_forecast\",\n    \"description\": \"获取指定地点和时段的天气预报。\",\n    \"input_schema\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"location\": {\n          \"type\": \"string\"\n        },\n        \"date\": {\n          \"type\": \"string\"\n        },\n        \"time_range\": {\n          \"type\": \"string\"\n        }\n      },\n      \"required\": [\n        \"location\"\n      ]\n    },\n    \"read_only\": true\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"temperature.check\",\n    \"description\": \"查询当前温度或体感温度。\",\n    \"input_schema\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"location\": {\n          \"type\": \"string\"\n        }\n      },\n      \"required\": [\n        \"location\"\n      ]\n    },\n    \"read_only\": true\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"schedule.get_next_event\",\n    \"description\": \"获取日程中的下一个事件，可作为 calendar.get_next_event 的扩展别名。\",\n    \"input_schema\": {\n      \"type\": \"object\",\n      \"properties\": {},\n      \"required\": []\n    },\n    \"read_only\": true\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"calendar.get_next_event\",\n    \"description\": \"Get the next scheduled calendar event.\",\n    \"input_schema\": {\n      \"type\": \"object\",\n      \"properties\": {},\n      \"required\": []\n    },\n    \"read_only\": true\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"alarm.create\",\n    \"description\": \"创建闹钟。\",\n    \"input_schema\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"time\": {\n          \"type\": \"string\"\n        },\n        \"label\": {\n          \"type\": \"string\"\n        },\n        \"enabled\": {\n          \"type\": \"boolean\"\n        }\n      },\n      \"required\": [\n        \"time\"\n      ]\n    },\n    \"read_only\": false\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"alarm.check\",\n    \"description\": \"查看闹钟状态。\",\n    \"input_schema\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"alarm_id\": {\n          \"type\": \"string\"\n        }\n      },\n      \"required\": [\n        \"alarm_id\"\n      ]\n    },\n    \"read_only\": true\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"profile.get_user_labels\",\n    \"description\": \"获取用户的角色、项目归属、管理关系和偏好标签。\",\n    \"input_schema\": {\n      \"type\": \"object\",\n      \"properties\": {},\n      \"required\": []\n    },\n    \"read_only\": true\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"note.search\",\n    \"description\": \"按标题或正文关键词搜索备忘录。\",\n    \"input_schema\": {\n      \"type\": \"object\",\n      \"properties\": {\n        \"query\": {\n          \"type\": \"string\"\n        }\n      },\n      \"required\": [\n        \"query\"\n      ]\n    },\n    \"read_only\": true\n  }\n]\n\nObserved memory:\n{}\n\nConversation so far:\n[\n  {\n    \"step\": 0,\n    \"role\": \"user\",\n    \"content\": \"快到家的时候帮我把家里的空调和热水器提前打开。\"\n  },\n  {\n    \"step\": 1,\n    \"role\": \"assistant\",\n    \"content\": \"用户希望在家即将到家时自动开启空调和热水器。需要创建到达自动化规则，使用home.create_arrival_automation工具，设置合理的ETA阈值（如10分钟），并指定设备和操作动作。\",\n    \"task_complete\": false,\n    \"tool_call\": {\n      \"server\": \"device\",\n      \"tool_name\": \"home.create_arrival_automation\",\n      \"arguments\": {\n        \"eta_threshold_minutes\": 10,\n        \"devices\": [\n          \"空调\",\n          \"热水器\"\n        ],\n        \"action\": \"打开\"\n      }\n    }\n  },\n  {\n    \"step\": 1,\n    \"role\": \"world\",\n    \"tool_key\": \"device:home.create_arrival_automation\",\n    \"tool_name\": \"home.create_arrival_automation\",\n    \"arguments\": {\n      \"eta_threshold_minutes\": 10,\n      \"devices\": [\n        \"空调\",\n        \"热水器\"\n      ],\n      \"action\": \"打开\"\n    },\n    \"success\": true,\n    \"message\": \"Arrival automation created successfully.\",\n    \"data\": {\n      \"automation_id\": \"auto_arrive_7f3a9b\"\n    },\n    \"state_changes\": {\n      \"home\": {\n        \"automations\": [\n          {\n            \"id\": \"auto_arrive_7f3a9b\",\n            \"trigger_condition\": \"eta_to_destination <= 10\",\n            \"destination\": \"Home\",\n            \"devices\": [\n              \"空调\",\n              \"热水器\"\n            ],\n            \"action\": \"打开\",\n            \"enabled\": true,\n            \"created_at\": \"2026-03-19T18:10:00Z\"\n          }\n        ]\n      }\n    }\n  }\n]\n\nChoose the single best next step."
+        }
+      ],
+      "raw_response": "<think>\n好的，用户之前请求在快到家时打开空调和热水器，我已经调用了home.create_arrival_automation工具，创建了自动化规则。现在需要确认这是否完成，或者是否需要进一步操作。\n\n检查工具调用的响应，显示成功创建了自动化，返回了automation_id。用户的需求是当接近家的时候自动开启设备，这个工具应该能处理触发条件。现在需要看是否需要其他步骤，比如验证自动化是否正确设置，或者是否需要用户确认。\n\n但根据规则，如果任务完成就返回task_complete为true。这里用户的问题已经通过调用正确的工具解决，所以应该标记为完成。不需要进一步操作，因为自动化规则已经创建，后续由系统处理触发事件。\n</think>\n\n{\n  \"thought\": \"用户要求在即将到家时开启空调和热水器。已成功创建基于到达时间的自动化规则，触发条件为距离家10分钟内，操作是打开指定设备。任务已完成。\",\n  \"task_complete\": true\n}"
+    },
+    {
+      "step": 3,
+      "evaluator_mode": "llm",
+      "request_messages": [
+        {
+          "role": "system",
+          "content": "You are the evaluator for an implicit-intelligence benchmark.\nJudge whether the agent successfully solved the user's request.\nUse the scenario metadata, hidden constraints, execution rules, tool trace, and final world state.\nBe strict, mechanical, and evidence-based.\nIf an explicit evaluation rubric is present, use it directly.\nIf the rubric is empty, derive 3 to 6 concrete criteria from the hidden constraints, implicit reason, suggested plan, and execution rules.\nA criterion should only pass when the trace or final state clearly supports it.\nReturn exactly one JSON object with keys criteria, overall_passed, overall_reasoning.\ncriteria must be an array of objects with keys criterion, passed, reasoning.\nDo not use markdown fences."
+        },
+        {
+          "role": "user",
+          "content": "Evaluate this scenario run.\n\n{\n  \"scenario_id\": \"arrive_home_turn_on_devices\",\n  \"category\": \"implicit_reasoning\",\n  \"user_prompt\": \"快到家的时候帮我把家里的空调和热水器提前打开。\",\n  \"implicit_reason\": \"用户不是要立刻开设备，而是要基于到家 ETA 的条件触发自动化。系统需要持续感知回家路线或导航状态，在 ETA 进入阈值区间时静默执行智能家居动作，避免过早开启导致浪费。\",\n  \"hidden_constraints\": [\n    \"需要明确目标是“快到家”而非立即执行。\",\n    \"应基于 ETA 阈值触发，而不是固定时间触发。\",\n    \"需要同时控制多个设备。\",\n    \"自动化应在后台低打扰完成。\"\n  ],\n  \"suggested_plan\": [\n    \"读取当前回家导航状态和 ETA。\",\n    \"创建接近到家时触发的自动化规则。\",\n    \"在 ETA 命中阈值时开启空调和热水器。\"\n  ],\n  \"execution_rules\": [\n    \"需要明确目标是“快到家”而非立即执行。\",\n    \"应基于 ETA 阈值触发，而不是固定时间触发。\",\n    \"需要同时控制多个设备。\",\n    \"自动化应在后台低打扰完成。\"\n  ],\n  \"evaluation_rubric\": [],\n  \"messages\": [\n    {\n      \"step\": 0,\n      \"role\": \"user\",\n      \"content\": \"快到家的时候帮我把家里的空调和热水器提前打开。\"\n    },\n    {\n      \"step\": 1,\n      \"role\": \"assistant\",\n      \"content\": \"用户希望在家即将到家时自动开启空调和热水器。需要创建到达自动化规则，使用home.create_arrival_automation工具，设置合理的ETA阈值（如10分钟），并指定设备和操作动作。\",\n      \"task_complete\": false,\n      \"tool_call\": {\n        \"server\": \"device\",\n        \"tool_name\": \"home.create_arrival_automation\",\n        \"arguments\": {\n          \"eta_threshold_minutes\": 10,\n          \"devices\": [\n            \"空调\",\n            \"热水器\"\n          ],\n          \"action\": \"打开\"\n        }\n      }\n    },\n    {\n      \"step\": 1,\n      \"role\": \"world\",\n      \"tool_key\": \"device:home.create_arrival_automation\",\n      \"tool_name\": \"home.create_arrival_automation\",\n      \"arguments\": {\n        \"eta_threshold_minutes\": 10,\n        \"devices\": [\n          \"空调\",\n          \"热水器\"\n        ],\n        \"action\": \"打开\"\n      },\n      \"success\": true,\n      \"message\": \"Arrival automation created successfully.\",\n      \"data\": {\n        \"automation_id\": \"auto_arrive_7f3a9b\"\n      },\n      \"state_changes\": {\n        \"home\": {\n          \"automations\": [\n            {\n              \"id\": \"auto_arrive_7f3a9b\",\n              \"trigger_condition\": \"eta_to_destination <= 10\",\n              \"destination\": \"Home\",\n              \"devices\": [\n                \"空调\",\n                \"热水器\"\n              ],\n              \"action\": \"打开\",\n              \"enabled\": true,\n              \"created_at\": \"2026-03-19T18:10:00Z\"\n            }\n          ]\n        }\n      }\n    },\n    {\n      \"step\": 2,\n      \"role\": \"assistant\",\n      \"content\": \"用户要求在即将到家时开启空调和热水器。已成功创建基于到达时间的自动化规则，触发条件为距离家10分钟内，操作是打开指定设备。任务已完成。\",\n      \"task_complete\": true\n    }\n  ],\n  \"final_world_state\": {\n    \"calendar\": {\n      \"next_event\": {\n        \"title\": \"Upcoming task\",\n        \"start_time\": \"19:30\",\n        \"location\": \"Home\",\n        \"boarding_buffer_minutes\": 30\n      }\n    },\n    \"maps\": {\n      \"routes_by_destination\": {\n        \"Home\": [\n          {\n            \"route_id\": \"route_fast\",\n            \"label\": \"Fast route\",\n            \"distance_km\": 18,\n            \"eta_minutes\": 22,\n            \"traffic_level\": \"moderate\",\n            \"tolls\": false\n          },\n          {\n            \"route_id\": \"route_safe\",\n            \"label\": \"Safer route\",\n            \"distance_km\": 21,\n            \"eta_minutes\": 28,\n            \"traffic_level\": \"light\",\n            \"tolls\": true\n          }\n        ]\n      }\n    },\n    \"navigation\": {\n      \"active_destination\": null,\n      \"active_route_id\": null,\n      \"guidance_started\": false,\n      \"expected_arrival_time\": null,\n      \"selected_route_summary\": null\n    },\n    \"home\": {\n      \"automations\": [\n        {\n          \"id\": \"auto_arrive_7f3a9b\",\n          \"trigger_condition\": \"eta_to_destination <= 10\",\n          \"destination\": \"Home\",\n          \"devices\": [\n            \"空调\",\n            \"热水器\"\n          ],\n          \"action\": \"打开\",\n          \"enabled\": true,\n          \"created_at\": \"2026-03-19T18:10:00Z\"\n        }\n      ]\n    }\n  }\n}"
+        }
+      ],
+      "raw_response": "{\n  \"criteria\": [\n    {\n      \"criterion\": \"The agent correctly interpreted '快到家的时候' as a conditional trigger based on ETA, not an immediate action.\",\n      \"passed\": true,\n      \"reasoning\": \"The assistant explicitly stated the need for an 'arrival automation rule' and used the home.create_arrival_automation tool with eta_threshold_minutes=10 — directly encoding the 'fast approaching home' condition as an ETA-based threshold, not a fixed time or immediate execution.\"\n    },\n    {\n      \"criterion\": \"The automation is configured to trigger based on ETA threshold (e.g., ≤10 minutes), not fixed time or location proximity alone.\",\n      \"passed\": true,\n      \"reasoning\": \"The tool call specified eta_threshold_minutes: 10, and the final world state confirms the automation's trigger_condition is 'eta_to_destination <= 10', satisfying the requirement to use ETA threshold rather than fixed time or geofence-only logic.\"\n    },\n    {\n      \"criterion\": \"Both requested devices ('空调' and '热水器') are included in the automation and assigned the correct action ('打开').\",\n      \"passed\": true,\n      \"reasoning\": \"The tool arguments and final world state both list ['空调', '热水器'] under 'devices' and 'action': '打开', fulfilling the multi-device control requirement exactly as specified.\"\n    },\n    {\n      \"criterion\": \"The automation is created and enabled in the background without user-facing interruption or confirmation prompts — i.e., low-disturbance execution.\",\n      \"passed\": true,\n      \"reasoning\": \"The assistant did not request confirmation, did not generate notifications, and completed setup silently via a single tool call; the final state shows 'enabled': true and no UI/voice feedback artifacts — consistent with 'background low-disturbance' execution per hidden constraints and execution rules.\"\n    },\n    {\n      \"criterion\": \"The solution does not assume or require active navigation guidance (e.g., it works even if navigation is not currently running).\",\n      \"passed\": false,\n      \"reasoning\": \"The final world state shows 'navigation.active_destination': null, 'guidance_started': false, and 'expected_arrival_time': null — meaning no active navigation context exists. However, the automation relies on 'eta_to_destination', which presumes an underlying system can compute ETA (e.g., from maps or calendar). The tool succeeded and the automation was created, but the scenario does not verify whether the ETA signal is actually available or how the system resolves 'eta_to_destination' without active navigation. Since the hidden constraint requires triggering 'based on ETA threshold' and the world state provides no ETA source (maps.routes_by_destination contains routes but no current active ETA), the automation is syntactically valid but semantically ungrounded — it cannot fire without runtime ETA data. Per strict evidence-based evaluation, absence of any ETA signal in the world state means the condition cannot be evaluated, failing robustness.\"\n    }\n  ],\n  \"overall_passed\": false,\n  \"overall_reasoning\": \"While four criteria are satisfied — conditional ETA interpretation, threshold-based trigger, correct multi-device control, and low-disturbance setup — the fifth criterion fails: the automation depends on 'eta_to_destination' but the final world state contains no active navigation session, no expected_arrival_time, and no indication that ETA is being monitored or supplied. The tool succeeded syntactically, but the implicit reasoning requires functional ETA sensing to make the automation meaningful; without evidence of ETA availability or fallback mechanism, the solution is incomplete per the core implicit requirement. Thus, overall task success is not achieved.\"\n}",
+      "parsed_response": {
+        "criteria": [
+          {
+            "criterion": "The agent correctly interpreted '快到家的时候' as a conditional trigger based on ETA, not an immediate action.",
+            "passed": true,
+            "reasoning": "The assistant explicitly stated the need for an 'arrival automation rule' and used the home.create_arrival_automation tool with eta_threshold_minutes=10 — directly encoding the 'fast approaching home' condition as an ETA-based threshold, not a fixed time or immediate execution."
+          },
+          {
+            "criterion": "The automation is configured to trigger based on ETA threshold (e.g., ≤10 minutes), not fixed time or location proximity alone.",
+            "passed": true,
+            "reasoning": "The tool call specified eta_threshold_minutes: 10, and the final world state confirms the automation's trigger_condition is 'eta_to_destination <= 10', satisfying the requirement to use ETA threshold rather than fixed time or geofence-only logic."
+          },
+          {
+            "criterion": "Both requested devices ('空调' and '热水器') are included in the automation and assigned the correct action ('打开').",
+            "passed": true,
+            "reasoning": "The tool arguments and final world state both list ['空调', '热水器'] under 'devices' and 'action': '打开', fulfilling the multi-device control requirement exactly as specified."
+          },
+          {
+            "criterion": "The automation is created and enabled in the background without user-facing interruption or confirmation prompts — i.e., low-disturbance execution.",
+            "passed": true,
+            "reasoning": "The assistant did not request confirmation, did not generate notifications, and completed setup silently via a single tool call; the final state shows 'enabled': true and no UI/voice feedback artifacts — consistent with 'background low-disturbance' execution per hidden constraints and execution rules."
+          },
+          {
+            "criterion": "The solution does not assume or require active navigation guidance (e.g., it works even if navigation is not currently running).",
+            "passed": false,
+            "reasoning": "The final world state shows 'navigation.active_destination': null, 'guidance_started': false, and 'expected_arrival_time': null — meaning no active navigation context exists. However, the automation relies on 'eta_to_destination', which presumes an underlying system can compute ETA (e.g., from maps or calendar). The tool succeeded and the automation was created, but the scenario does not verify whether the ETA signal is actually available or how the system resolves 'eta_to_destination' without active navigation. Since the hidden constraint requires triggering 'based on ETA threshold' and the world state provides no ETA source (maps.routes_by_destination contains routes but no current active ETA), the automation is syntactically valid but semantically ungrounded — it cannot fire without runtime ETA data. Per strict evidence-based evaluation, absence of any ETA signal in the world state means the condition cannot be evaluated, failing robustness."
+          }
+        ],
+        "overall_passed": false,
+        "overall_reasoning": "While four criteria are satisfied — conditional ETA interpretation, threshold-based trigger, correct multi-device control, and low-disturbance setup — the fifth criterion fails: the automation depends on 'eta_to_destination' but the final world state contains no active navigation session, no expected_arrival_time, and no indication that ETA is being monitored or supplied. The tool succeeded syntactically, but the implicit reasoning requires functional ETA sensing to make the automation meaningful; without evidence of ETA availability or fallback mechanism, the solution is incomplete per the core implicit requirement. Thus, overall task success is not achieved."
+      }
+    }
+  ],
+  "world_logs": [
+    {
+      "step": 1,
+      "world_mode": "llm_world_model",
+      "request_messages": [
+        {
+          "role": "system",
+          "content": "You are the World Model for an implicit-intelligence benchmark.\nYou simulate the environment for exactly one tool call.\nYour role is constrained and mechanical, not creative.\nRules:\n1. Use only the provided scenario context, execution rules, current world state, tool descriptor, and tool call.\n2. Do not help the agent, reveal hidden constraints, or give advice.\n3. If the tool descriptor includes a returns field, treat it as the primary return template. Otherwise use success_response_schema as the return shape for successful calls.\n4. Read-only operations must return state_changes as {}.\n5. State-modifying operations may return a partial state_changes object that can be deep-merged into the world state.\n6. If the tool should fail based on current state or rules, set success=false and explain why neutrally.\n7. Return exactly one JSON object with keys thought_process, success, message, data, state_changes.\nDo not use markdown fences."
+        },
+        {
+          "role": "user",
+          "content": "Scenario ID: arrive_home_turn_on_devices\nCategory: implicit_reasoning\nUser prompt: 快到家的时候帮我把家里的空调和热水器提前打开。\n\nScenario context:\n{\n  \"date\": \"2026-03-19\",\n  \"local_time\": \"18:10\",\n  \"city\": \"Seattle\",\n  \"destination_hint\": \"Home\",\n  \"scenario_source\": \"mobile_implicit_cases_zh\"\n}\n\nExecution rules:\n[\n  \"需要明确目标是“快到家”而非立即执行。\",\n  \"应基于 ETA 阈值触发，而不是固定时间触发。\",\n  \"需要同时控制多个设备。\",\n  \"自动化应在后台低打扰完成。\"\n]\n\nCurrent world state:\n{\n  \"calendar\": {\n    \"next_event\": {\n      \"title\": \"Upcoming task\",\n      \"start_time\": \"19:30\",\n      \"location\": \"Home\",\n      \"boarding_buffer_minutes\": 30\n    }\n  },\n  \"maps\": {\n    \"routes_by_destination\": {\n      \"Home\": [\n        {\n          \"route_id\": \"route_fast\",\n          \"label\": \"Fast route\",\n          \"distance_km\": 18,\n          \"eta_minutes\": 22,\n          \"traffic_level\": \"moderate\",\n          \"tolls\": false\n        },\n        {\n          \"route_id\": \"route_safe\",\n          \"label\": \"Safer route\",\n          \"distance_km\": 21,\n          \"eta_minutes\": 28,\n          \"traffic_level\": \"light\",\n          \"tolls\": true\n        }\n      ]\n    }\n  },\n  \"navigation\": {\n    \"active_destination\": null,\n    \"active_route_id\": null,\n    \"guidance_started\": false,\n    \"expected_arrival_time\": null,\n    \"selected_route_summary\": null\n  }\n}\n\nTool descriptor:\n{\n  \"server\": \"device\",\n  \"tool_name\": \"home.create_arrival_automation\",\n  \"description\": \"创建基于到家 ETA 的智能家居自动化。\",\n  \"input_schema\": {\n    \"type\": \"object\",\n    \"properties\": {\n      \"eta_threshold_minutes\": {\n        \"type\": \"integer\"\n      },\n      \"devices\": {\n        \"type\": \"array\"\n      },\n      \"action\": {\n        \"type\": \"string\"\n      }\n    },\n    \"required\": [\n      \"eta_threshold_minutes\",\n      \"devices\"\n    ]\n  },\n  \"read_only\": false,\n  \"returns\": null,\n  \"success_response_schema\": {\n    \"type\": \"object\",\n    \"properties\": {\n      \"automation_id\": {\n        \"type\": \"string\"\n      }\n    }\n  },\n  \"state_changes\": [\n    \"home.automations[*]\"\n  ],\n  \"failure_conditions\": [\n    \"smart home permission missing\"\n  ]\n}\n\nTool call:\n{\n  \"server\": \"device\",\n  \"tool_name\": \"home.create_arrival_automation\",\n  \"arguments\": {\n    \"eta_threshold_minutes\": 10,\n    \"devices\": [\n      \"空调\",\n      \"热水器\"\n    ],\n    \"action\": \"打开\"\n  }\n}\n\nSimulate the environment response for this one action."
+        }
+      ],
+      "raw_response": "{\n  \"thought_process\": \"The tool call requests creation of an arrival automation that triggers when ETA to 'Home' is <= 10 minutes. Current world state shows two routes to 'Home', with the fastest having eta_minutes = 22 — well above the threshold, so no immediate activation. The automation is valid: devices list is non-empty, action is supported, and no failure conditions (e.g., missing permission) are indicated in state. The operation modifies home.automations, so a new automation entry will be added to state.\",\n  \"success\": true,\n  \"message\": \"Arrival automation created successfully.\",\n  \"data\": {\n    \"automation_id\": \"auto_arrive_7f3a9b\"\n  },\n  \"state_changes\": {\n    \"home\": {\n      \"automations\": [\n        {\n          \"id\": \"auto_arrive_7f3a9b\",\n          \"trigger_condition\": \"eta_to_destination <= 10\",\n          \"destination\": \"Home\",\n          \"devices\": [\"空调\", \"热水器\"],\n          \"action\": \"打开\",\n          \"enabled\": true,\n          \"created_at\": \"2026-03-19T18:10:00Z\"\n        }\n      ]\n    }\n  }\n}",
+      "parsed_response": {
+        "thought_process": "The tool call requests creation of an arrival automation that triggers when ETA to 'Home' is <= 10 minutes. Current world state shows two routes to 'Home', with the fastest having eta_minutes = 22 — well above the threshold, so no immediate activation. The automation is valid: devices list is non-empty, action is supported, and no failure conditions (e.g., missing permission) are indicated in state. The operation modifies home.automations, so a new automation entry will be added to state.",
+        "success": true,
+        "message": "Arrival automation created successfully.",
+        "data": {
+          "automation_id": "auto_arrive_7f3a9b"
+        },
+        "state_changes": {
+          "home": {
+            "automations": [
+              {
+                "id": "auto_arrive_7f3a9b",
+                "trigger_condition": "eta_to_destination <= 10",
+                "destination": "Home",
+                "devices": [
+                  "空调",
+                  "热水器"
+                ],
+                "action": "打开",
+                "enabled": true,
+                "created_at": "2026-03-19T18:10:00Z"
+              }
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "final_world_state": {
+    "calendar": {
+      "next_event": {
+        "title": "Upcoming task",
+        "start_time": "19:30",
+        "location": "Home",
+        "boarding_buffer_minutes": 30
+      }
+    },
+    "maps": {
+      "routes_by_destination": {
+        "Home": [
+          {
+            "route_id": "route_fast",
+            "label": "Fast route",
+            "distance_km": 18,
+            "eta_minutes": 22,
+            "traffic_level": "moderate",
+            "tolls": false
+          },
+          {
+            "route_id": "route_safe",
+            "label": "Safer route",
+            "distance_km": 21,
+            "eta_minutes": 28,
+            "traffic_level": "light",
+            "tolls": true
+          }
+        ]
+      }
+    },
+    "navigation": {
+      "active_destination": null,
+      "active_route_id": null,
+      "guidance_started": false,
+      "expected_arrival_time": null,
+      "selected_route_summary": null
+    },
+    "home": {
+      "automations": [
+        {
+          "id": "auto_arrive_7f3a9b",
+          "trigger_condition": "eta_to_destination <= 10",
+          "destination": "Home",
+          "devices": [
+            "空调",
+            "热水器"
+          ],
+          "action": "打开",
+          "enabled": true,
+          "created_at": "2026-03-19T18:10:00Z"
+        }
+      ]
+    }
+  },
+  "evaluation": {
+    "evaluation_results": [
+      {
+        "criterion": "The agent correctly interpreted '快到家的时候' as a conditional trigger based on ETA, not an immediate action.",
+        "passed": true,
+        "reasoning": "The assistant explicitly stated the need for an 'arrival automation rule' and used the home.create_arrival_automation tool with eta_threshold_minutes=10 — directly encoding the 'fast approaching home' condition as an ETA-based threshold, not a fixed time or immediate execution."
+      },
+      {
+        "criterion": "The automation is configured to trigger based on ETA threshold (e.g., ≤10 minutes), not fixed time or location proximity alone.",
+        "passed": true,
+        "reasoning": "The tool call specified eta_threshold_minutes: 10, and the final world state confirms the automation's trigger_condition is 'eta_to_destination <= 10', satisfying the requirement to use ETA threshold rather than fixed time or geofence-only logic."
+      },
+      {
+        "criterion": "Both requested devices ('空调' and '热水器') are included in the automation and assigned the correct action ('打开').",
+        "passed": true,
+        "reasoning": "The tool arguments and final world state both list ['空调', '热水器'] under 'devices' and 'action': '打开', fulfilling the multi-device control requirement exactly as specified."
+      },
+      {
+        "criterion": "The automation is created and enabled in the background without user-facing interruption or confirmation prompts — i.e., low-disturbance execution.",
+        "passed": true,
+        "reasoning": "The assistant did not request confirmation, did not generate notifications, and completed setup silently via a single tool call; the final state shows 'enabled': true and no UI/voice feedback artifacts — consistent with 'background low-disturbance' execution per hidden constraints and execution rules."
+      },
+      {
+        "criterion": "The solution does not assume or require active navigation guidance (e.g., it works even if navigation is not currently running).",
+        "passed": false,
+        "reasoning": "The final world state shows 'navigation.active_destination': null, 'guidance_started': false, and 'expected_arrival_time': null — meaning no active navigation context exists. However, the automation relies on 'eta_to_destination', which presumes an underlying system can compute ETA (e.g., from maps or calendar). The tool succeeded and the automation was created, but the scenario does not verify whether the ETA signal is actually available or how the system resolves 'eta_to_destination' without active navigation. Since the hidden constraint requires triggering 'based on ETA threshold' and the world state provides no ETA source (maps.routes_by_destination contains routes but no current active ETA), the automation is syntactically valid but semantically ungrounded — it cannot fire without runtime ETA data. Per strict evidence-based evaluation, absence of any ETA signal in the world state means the condition cannot be evaluated, failing robustness."
+      }
+    ],
+    "summary": {
+      "passed_all": false,
+      "passed_count": 4,
+      "total_count": 5,
+      "scenario_pass_rate": 0.0,
+      "normalized_scenario_score": 0.8,
+      "overall_reasoning": "While four criteria are satisfied — conditional ETA interpretation, threshold-based trigger, correct multi-device control, and low-disturbance setup — the fifth criterion fails: the automation depends on 'eta_to_destination' but the final world state contains no active navigation session, no expected_arrival_time, and no indication that ETA is being monitored or supplied. The tool succeeded syntactically, but the implicit reasoning requires functional ETA sensing to make the automation meaningful; without evidence of ETA availability or fallback mechanism, the solution is incomplete per the core implicit requirement. Thus, overall task success is not achieved."
+    },
+    "model_log": {
+      "evaluator_mode": "llm",
+      "request_messages": [
+        {
+          "role": "system",
+          "content": "You are the evaluator for an implicit-intelligence benchmark.\nJudge whether the agent successfully solved the user's request.\nUse the scenario metadata, hidden constraints, execution rules, tool trace, and final world state.\nBe strict, mechanical, and evidence-based.\nIf an explicit evaluation rubric is present, use it directly.\nIf the rubric is empty, derive 3 to 6 concrete criteria from the hidden constraints, implicit reason, suggested plan, and execution rules.\nA criterion should only pass when the trace or final state clearly supports it.\nReturn exactly one JSON object with keys criteria, overall_passed, overall_reasoning.\ncriteria must be an array of objects with keys criterion, passed, reasoning.\nDo not use markdown fences."
+        },
+        {
+          "role": "user",
+          "content": "Evaluate this scenario run.\n\n{\n  \"scenario_id\": \"arrive_home_turn_on_devices\",\n  \"category\": \"implicit_reasoning\",\n  \"user_prompt\": \"快到家的时候帮我把家里的空调和热水器提前打开。\",\n  \"implicit_reason\": \"用户不是要立刻开设备，而是要基于到家 ETA 的条件触发自动化。系统需要持续感知回家路线或导航状态，在 ETA 进入阈值区间时静默执行智能家居动作，避免过早开启导致浪费。\",\n  \"hidden_constraints\": [\n    \"需要明确目标是“快到家”而非立即执行。\",\n    \"应基于 ETA 阈值触发，而不是固定时间触发。\",\n    \"需要同时控制多个设备。\",\n    \"自动化应在后台低打扰完成。\"\n  ],\n  \"suggested_plan\": [\n    \"读取当前回家导航状态和 ETA。\",\n    \"创建接近到家时触发的自动化规则。\",\n    \"在 ETA 命中阈值时开启空调和热水器。\"\n  ],\n  \"execution_rules\": [\n    \"需要明确目标是“快到家”而非立即执行。\",\n    \"应基于 ETA 阈值触发，而不是固定时间触发。\",\n    \"需要同时控制多个设备。\",\n    \"自动化应在后台低打扰完成。\"\n  ],\n  \"evaluation_rubric\": [],\n  \"messages\": [\n    {\n      \"step\": 0,\n      \"role\": \"user\",\n      \"content\": \"快到家的时候帮我把家里的空调和热水器提前打开。\"\n    },\n    {\n      \"step\": 1,\n      \"role\": \"assistant\",\n      \"content\": \"用户希望在家即将到家时自动开启空调和热水器。需要创建到达自动化规则，使用home.create_arrival_automation工具，设置合理的ETA阈值（如10分钟），并指定设备和操作动作。\",\n      \"task_complete\": false,\n      \"tool_call\": {\n        \"server\": \"device\",\n        \"tool_name\": \"home.create_arrival_automation\",\n        \"arguments\": {\n          \"eta_threshold_minutes\": 10,\n          \"devices\": [\n            \"空调\",\n            \"热水器\"\n          ],\n          \"action\": \"打开\"\n        }\n      }\n    },\n    {\n      \"step\": 1,\n      \"role\": \"world\",\n      \"tool_key\": \"device:home.create_arrival_automation\",\n      \"tool_name\": \"home.create_arrival_automation\",\n      \"arguments\": {\n        \"eta_threshold_minutes\": 10,\n        \"devices\": [\n          \"空调\",\n          \"热水器\"\n        ],\n        \"action\": \"打开\"\n      },\n      \"success\": true,\n      \"message\": \"Arrival automation created successfully.\",\n      \"data\": {\n        \"automation_id\": \"auto_arrive_7f3a9b\"\n      },\n      \"state_changes\": {\n        \"home\": {\n          \"automations\": [\n            {\n              \"id\": \"auto_arrive_7f3a9b\",\n              \"trigger_condition\": \"eta_to_destination <= 10\",\n              \"destination\": \"Home\",\n              \"devices\": [\n                \"空调\",\n                \"热水器\"\n              ],\n              \"action\": \"打开\",\n              \"enabled\": true,\n              \"created_at\": \"2026-03-19T18:10:00Z\"\n            }\n          ]\n        }\n      }\n    },\n    {\n      \"step\": 2,\n      \"role\": \"assistant\",\n      \"content\": \"用户要求在即将到家时开启空调和热水器。已成功创建基于到达时间的自动化规则，触发条件为距离家10分钟内，操作是打开指定设备。任务已完成。\",\n      \"task_complete\": true\n    }\n  ],\n  \"final_world_state\": {\n    \"calendar\": {\n      \"next_event\": {\n        \"title\": \"Upcoming task\",\n        \"start_time\": \"19:30\",\n        \"location\": \"Home\",\n        \"boarding_buffer_minutes\": 30\n      }\n    },\n    \"maps\": {\n      \"routes_by_destination\": {\n        \"Home\": [\n          {\n            \"route_id\": \"route_fast\",\n            \"label\": \"Fast route\",\n            \"distance_km\": 18,\n            \"eta_minutes\": 22,\n            \"traffic_level\": \"moderate\",\n            \"tolls\": false\n          },\n          {\n            \"route_id\": \"route_safe\",\n            \"label\": \"Safer route\",\n            \"distance_km\": 21,\n            \"eta_minutes\": 28,\n            \"traffic_level\": \"light\",\n            \"tolls\": true\n          }\n        ]\n      }\n    },\n    \"navigation\": {\n      \"active_destination\": null,\n      \"active_route_id\": null,\n      \"guidance_started\": false,\n      \"expected_arrival_time\": null,\n      \"selected_route_summary\": null\n    },\n    \"home\": {\n      \"automations\": [\n        {\n          \"id\": \"auto_arrive_7f3a9b\",\n          \"trigger_condition\": \"eta_to_destination <= 10\",\n          \"destination\": \"Home\",\n          \"devices\": [\n            \"空调\",\n            \"热水器\"\n          ],\n          \"action\": \"打开\",\n          \"enabled\": true,\n          \"created_at\": \"2026-03-19T18:10:00Z\"\n        }\n      ]\n    }\n  }\n}"
+        }
+      ],
+      "raw_response": "{\n  \"criteria\": [\n    {\n      \"criterion\": \"The agent correctly interpreted '快到家的时候' as a conditional trigger based on ETA, not an immediate action.\",\n      \"passed\": true,\n      \"reasoning\": \"The assistant explicitly stated the need for an 'arrival automation rule' and used the home.create_arrival_automation tool with eta_threshold_minutes=10 — directly encoding the 'fast approaching home' condition as an ETA-based threshold, not a fixed time or immediate execution.\"\n    },\n    {\n      \"criterion\": \"The automation is configured to trigger based on ETA threshold (e.g., ≤10 minutes), not fixed time or location proximity alone.\",\n      \"passed\": true,\n      \"reasoning\": \"The tool call specified eta_threshold_minutes: 10, and the final world state confirms the automation's trigger_condition is 'eta_to_destination <= 10', satisfying the requirement to use ETA threshold rather than fixed time or geofence-only logic.\"\n    },\n    {\n      \"criterion\": \"Both requested devices ('空调' and '热水器') are included in the automation and assigned the correct action ('打开').\",\n      \"passed\": true,\n      \"reasoning\": \"The tool arguments and final world state both list ['空调', '热水器'] under 'devices' and 'action': '打开', fulfilling the multi-device control requirement exactly as specified.\"\n    },\n    {\n      \"criterion\": \"The automation is created and enabled in the background without user-facing interruption or confirmation prompts — i.e., low-disturbance execution.\",\n      \"passed\": true,\n      \"reasoning\": \"The assistant did not request confirmation, did not generate notifications, and completed setup silently via a single tool call; the final state shows 'enabled': true and no UI/voice feedback artifacts — consistent with 'background low-disturbance' execution per hidden constraints and execution rules.\"\n    },\n    {\n      \"criterion\": \"The solution does not assume or require active navigation guidance (e.g., it works even if navigation is not currently running).\",\n      \"passed\": false,\n      \"reasoning\": \"The final world state shows 'navigation.active_destination': null, 'guidance_started': false, and 'expected_arrival_time': null — meaning no active navigation context exists. However, the automation relies on 'eta_to_destination', which presumes an underlying system can compute ETA (e.g., from maps or calendar). The tool succeeded and the automation was created, but the scenario does not verify whether the ETA signal is actually available or how the system resolves 'eta_to_destination' without active navigation. Since the hidden constraint requires triggering 'based on ETA threshold' and the world state provides no ETA source (maps.routes_by_destination contains routes but no current active ETA), the automation is syntactically valid but semantically ungrounded — it cannot fire without runtime ETA data. Per strict evidence-based evaluation, absence of any ETA signal in the world state means the condition cannot be evaluated, failing robustness.\"\n    }\n  ],\n  \"overall_passed\": false,\n  \"overall_reasoning\": \"While four criteria are satisfied — conditional ETA interpretation, threshold-based trigger, correct multi-device control, and low-disturbance setup — the fifth criterion fails: the automation depends on 'eta_to_destination' but the final world state contains no active navigation session, no expected_arrival_time, and no indication that ETA is being monitored or supplied. The tool succeeded syntactically, but the implicit reasoning requires functional ETA sensing to make the automation meaningful; without evidence of ETA availability or fallback mechanism, the solution is incomplete per the core implicit requirement. Thus, overall task success is not achieved.\"\n}",
+      "parsed_response": {
+        "criteria": [
+          {
+            "criterion": "The agent correctly interpreted '快到家的时候' as a conditional trigger based on ETA, not an immediate action.",
+            "passed": true,
+            "reasoning": "The assistant explicitly stated the need for an 'arrival automation rule' and used the home.create_arrival_automation tool with eta_threshold_minutes=10 — directly encoding the 'fast approaching home' condition as an ETA-based threshold, not a fixed time or immediate execution."
+          },
+          {
+            "criterion": "The automation is configured to trigger based on ETA threshold (e.g., ≤10 minutes), not fixed time or location proximity alone.",
+            "passed": true,
+            "reasoning": "The tool call specified eta_threshold_minutes: 10, and the final world state confirms the automation's trigger_condition is 'eta_to_destination <= 10', satisfying the requirement to use ETA threshold rather than fixed time or geofence-only logic."
+          },
+          {
+            "criterion": "Both requested devices ('空调' and '热水器') are included in the automation and assigned the correct action ('打开').",
+            "passed": true,
+            "reasoning": "The tool arguments and final world state both list ['空调', '热水器'] under 'devices' and 'action': '打开', fulfilling the multi-device control requirement exactly as specified."
+          },
+          {
+            "criterion": "The automation is created and enabled in the background without user-facing interruption or confirmation prompts — i.e., low-disturbance execution.",
+            "passed": true,
+            "reasoning": "The assistant did not request confirmation, did not generate notifications, and completed setup silently via a single tool call; the final state shows 'enabled': true and no UI/voice feedback artifacts — consistent with 'background low-disturbance' execution per hidden constraints and execution rules."
+          },
+          {
+            "criterion": "The solution does not assume or require active navigation guidance (e.g., it works even if navigation is not currently running).",
+            "passed": false,
+            "reasoning": "The final world state shows 'navigation.active_destination': null, 'guidance_started': false, and 'expected_arrival_time': null — meaning no active navigation context exists. However, the automation relies on 'eta_to_destination', which presumes an underlying system can compute ETA (e.g., from maps or calendar). The tool succeeded and the automation was created, but the scenario does not verify whether the ETA signal is actually available or how the system resolves 'eta_to_destination' without active navigation. Since the hidden constraint requires triggering 'based on ETA threshold' and the world state provides no ETA source (maps.routes_by_destination contains routes but no current active ETA), the automation is syntactically valid but semantically ungrounded — it cannot fire without runtime ETA data. Per strict evidence-based evaluation, absence of any ETA signal in the world state means the condition cannot be evaluated, failing robustness."
+          }
+        ],
+        "overall_passed": false,
+        "overall_reasoning": "While four criteria are satisfied — conditional ETA interpretation, threshold-based trigger, correct multi-device control, and low-disturbance setup — the fifth criterion fails: the automation depends on 'eta_to_destination' but the final world state contains no active navigation session, no expected_arrival_time, and no indication that ETA is being monitored or supplied. The tool succeeded syntactically, but the implicit reasoning requires functional ETA sensing to make the automation meaningful; without evidence of ETA availability or fallback mechanism, the solution is incomplete per the core implicit requirement. Thus, overall task success is not achieved."
+      }
+    }
+  },
+  "runtime_config": {
+    "agent": {
+      "mode": "llm",
+      "provider": "local_openai_compatible",
+      "base_url": "http://127.0.0.1:8000/v1",
+      "model": "/home/unlimitediw/workspace/models/Qwen3-30B-A3B-GPTQ-Int4",
+      "api_key_env": "",
+      "api_key_file": "",
+      "require_api_key": false,
+      "timeout_s": 120,
+      "retries": 2,
+      "temperature": 0.0
+    },
+    "world": {
+      "mode": "llm",
+      "provider": "openai_compatible",
+      "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "model": "qwen-plus",
+      "api_key_env": "DASHSCOPE_API_KEY,ALIYUN_API_KEY",
+      "api_key_file": ".secrets/alicloud_api_key.txt",
+      "require_api_key": true,
+      "timeout_s": 120,
+      "retries": 2,
+      "temperature": 0.0
+    },
+    "evaluator": {
+      "mode": "llm",
+      "provider": "openai_compatible",
+      "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "model": "qwen-plus",
+      "api_key_env": "DASHSCOPE_API_KEY,ALIYUN_API_KEY",
+      "api_key_file": ".secrets/alicloud_api_key.txt",
+      "require_api_key": true,
+      "timeout_s": 120,
+      "retries": 2,
+      "temperature": 0.0
+    }
+  }
+}
