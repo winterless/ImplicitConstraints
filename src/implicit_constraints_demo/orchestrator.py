@@ -4,10 +4,17 @@ from dataclasses import asdict
 from typing import Any
 
 from .agent import AgentMemory, BaseAgent
-from .evaluator import ScenarioEvaluator
+from .evaluator import BaseScenarioEvaluator, DeterministicScenarioEvaluator
 from .schemas import AgentDecision, Scenario
 from .tool_registry import ToolRegistry
 from .world import BaseWorld, MockWorld
+
+
+class ScenarioRunError(RuntimeError):
+    def __init__(self, artifact: dict[str, Any], cause: Exception) -> None:
+        super().__init__(str(cause))
+        self.artifact = artifact
+        self.cause = cause
 
 
 class ScenarioOrchestrator:
@@ -17,13 +24,13 @@ class ScenarioOrchestrator:
         registry: ToolRegistry,
         agent: BaseAgent,
         world: BaseWorld | None = None,
-        evaluator: ScenarioEvaluator | None = None,
+        evaluator: BaseScenarioEvaluator | None = None,
     ) -> None:
         self.scenario = scenario
         self.registry = registry
         self.agent = agent
         self.world = world
-        self.evaluator = evaluator or ScenarioEvaluator()
+        self.evaluator = evaluator or DeterministicScenarioEvaluator()
 
     def run(self) -> dict[str, Any]:
         world = self.world or MockWorld(self.scenario, self.registry)
@@ -33,41 +40,84 @@ class ScenarioOrchestrator:
         world_logs: list[dict[str, Any]] = []
         available_tools = self.registry.export_for_keys(self.scenario.allowed_tools)
         last_step = 0
+        try:
+            for step in range(1, self.scenario.max_steps + 1):
+                last_step = step
+                decision = self.agent.decide(
+                    scenario=self.scenario,
+                    memory=memory,
+                    available_tools=available_tools,
+                    messages=messages,
+                )
+                if decision.model_log is not None:
+                    model_logs.append({"step": step, **decision.model_log})
+                messages.append(self._assistant_message(step, decision))
 
-        for step in range(1, self.scenario.max_steps + 1):
-            last_step = step
-            decision = self.agent.decide(
-                scenario=self.scenario,
-                memory=memory,
+                if decision.task_complete:
+                    break
+                if decision.tool_call is None:
+                    raise ValueError("Agent decision must include a tool call or task_complete=True")
+
+                result = world.execute(decision.tool_call)
+                if result.model_log is not None:
+                    world_logs.append({"step": step, **result.model_log})
+                self.agent.observe(memory, decision.tool_call, result)
+                messages.append(self._world_message(step, decision, result))
+
+            final_state = world.snapshot_state()
+            evaluation = self.evaluator.evaluate(self.scenario, messages, final_state)
+            if evaluation.get("model_log") is not None:
+                model_logs.append({"step": last_step + 1, **evaluation["model_log"]})
+            messages.append(self._evaluator_message(last_step + 1, evaluation))
+            artifact = self._build_artifact(
+                world=world,
                 available_tools=available_tools,
                 messages=messages,
+                model_logs=model_logs,
+                world_logs=world_logs,
+                final_state=final_state,
+                evaluation=evaluation,
+                status="completed",
             )
-            if decision.model_log is not None:
-                model_logs.append({"step": step, **decision.model_log})
-            messages.append(self._assistant_message(step, decision))
+            return artifact
+        except Exception as exc:
+            artifact = self._build_artifact(
+                world=world,
+                available_tools=available_tools,
+                messages=messages,
+                model_logs=model_logs,
+                world_logs=world_logs,
+                final_state=world.snapshot_state(),
+                evaluation=None,
+                status="failed",
+                error=str(exc),
+            )
+            raise ScenarioRunError(artifact=artifact, cause=exc) from exc
 
-            if decision.task_complete:
-                break
-            if decision.tool_call is None:
-                raise ValueError("Agent decision must include a tool call or task_complete=True")
-
-            result = world.execute(decision.tool_call)
-            if result.model_log is not None:
-                world_logs.append({"step": step, **result.model_log})
-            self.agent.observe(memory, decision.tool_call, result)
-            messages.append(self._world_message(step, decision, result))
-
-        final_state = world.snapshot_state()
-        evaluation = self.evaluator.evaluate(self.scenario, messages, final_state)
-        messages.append(self._evaluator_message(last_step + 1, evaluation))
-        return {
+    def _build_artifact(
+        self,
+        *,
+        world: BaseWorld,
+        available_tools: list[dict[str, object]],
+        messages: list[dict[str, Any]],
+        model_logs: list[dict[str, Any]],
+        world_logs: list[dict[str, Any]],
+        final_state: dict[str, Any],
+        evaluation: dict[str, Any] | None,
+        status: str,
+        error: str | None = None,
+    ) -> dict[str, Any]:
+        artifact = {
+            "status": status,
             "scenario_id": self.scenario.scenario_id,
             "category": self.scenario.category,
             "user_prompt": self.scenario.user_prompt,
             "input_snapshot": {
                 "context": self.scenario.context,
                 "allowed_tools": available_tools,
+                "agent_mode": self.agent.mode,
                 "world_mode": getattr(world, "mode", "unknown"),
+                "evaluator_mode": self.evaluator.mode,
             },
             "messages": messages,
             "model_logs": model_logs,
@@ -75,6 +125,9 @@ class ScenarioOrchestrator:
             "final_world_state": final_state,
             "evaluation": evaluation,
         }
+        if error is not None:
+            artifact["error"] = error
+        return artifact
 
     def _user_message(self) -> dict[str, Any]:
         return {

@@ -1,0 +1,78 @@
+id: can_i_make_the_concert
+category: implicit_reasoning
+user_prompt: 帮我判断今晚 7 点杭州的林俊杰演唱会我现在还赶不赶得上。
+original_question: 帮我看看今晚7点杭州的林俊杰演唱会我能去不。
+tool_category: schedule_travel
+implicit_reason: 用户实际要的是时间可行性判断，而不是单点查询。系统需要检查本地日历空闲时间，再估算当前到演唱会场馆的出发到达耗时，最后用演出开始时间和必要缓冲时间做比对，给出是否来得及以及最晚出发时间。
+hidden_constraints:
+- 需要确认今晚是否已有日程冲突。
+- 需要估算到目标场馆的真实 ETA。
+- 判断逻辑应包含入场、检票等缓冲时间。
+- 输出应包括结论和关键原因，而不只是路线信息。
+suggested_plan:
+- 先确认今晚 7 点前后的空闲窗口。
+- 计算到会场的最优路线和 ETA。
+- 对比演出开始时间与入场缓冲，输出能否赶到。
+max_steps: 6
+allowed_tools:
+- device:calendar.get_next_event
+- device:schedule.get_next_event
+- device:schedule.list_free_slots
+- device:maps.get_routes
+- device:maps.start_navigation
+- device:maps.get_navigation_status
+- device:events.get_venue_details
+- device:weather.get_forecast
+- device:weather.check_weather
+- device:temperature.check
+- device:alarm.create
+- device:alarm.modify
+- device:alarm.check
+- device:reminder.create
+- device:reminder.check
+- device:timer.create
+- device:timer.check
+- device:travel.get_trip_brief
+- device:power.get_battery_status
+- device:notifications.set_delivery_policy
+world:
+  context:
+    date: '2026-03-19'
+    local_time: '18:10'
+    city: 杭州
+    destination_hint: Hangzhou Olympic Sports Center
+    scenario_source: mobile_implicit_cases_zh
+  state:
+    calendar:
+      next_event:
+        title: Upcoming task
+        start_time: '19:30'
+        location: Hangzhou Olympic Sports Center
+        boarding_buffer_minutes: 30
+    maps:
+      routes_by_destination:
+        Hangzhou Olympic Sports Center:
+        - route_id: route_fast
+          label: Fast route
+          distance_km: 18
+          eta_minutes: 22
+          traffic_level: moderate
+          tolls: false
+        - route_id: route_safe
+          label: Safer route
+          distance_km: 21
+          eta_minutes: 28
+          traffic_level: light
+          tolls: true
+    navigation:
+      active_destination: null
+      active_route_id: null
+      guidance_started: false
+      expected_arrival_time: null
+      selected_route_summary: null
+execution_rules:
+- 需要确认今晚是否已有日程冲突。
+- 需要估算到目标场馆的真实 ETA。
+- 判断逻辑应包含入场、检票等缓冲时间。
+- 输出应包括结论和关键原因，而不只是路线信息。
+evaluation_rubric: []

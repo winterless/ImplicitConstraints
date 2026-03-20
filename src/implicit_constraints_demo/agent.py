@@ -16,6 +16,11 @@ class AgentMemory:
 
 
 class BaseAgent(ABC):
+    @property
+    @abstractmethod
+    def mode(self) -> str:
+        raise NotImplementedError
+
     @abstractmethod
     def decide(
         self,
@@ -44,6 +49,10 @@ class BaseAgent(ABC):
 class QwenPlanningAgent(BaseAgent):
     def __init__(self, client: ChatCompletionClient) -> None:
         self.client = client
+
+    @property
+    def mode(self) -> str:
+        return "llm"
 
     def decide(
         self,
@@ -99,6 +108,10 @@ class QwenPlanningAgent(BaseAgent):
 
 class HeuristicPlanningAgent(BaseAgent):
     """Local fallback agent for running the demo without a model API key."""
+
+    @property
+    def mode(self) -> str:
+        return "heuristic"
 
     def decide(
         self,

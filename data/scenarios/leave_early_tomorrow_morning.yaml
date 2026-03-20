@@ -1,0 +1,78 @@
+id: leave_early_tomorrow_morning
+category: implicit_reasoning
+user_prompt: 帮我判断我明天早上是否需要比平时更早出门，并帮我调整闹钟。
+original_question: 我明天早上需要提前出门吗？
+tool_category: schedule_travel
+implicit_reason: 用户真正关心的是明早首个行程是否会因天气或路况导致出发时间前移。系统需要读取明天第一个日程，结合天气、路况与通勤时长估算额外缓冲，再决定是否需要提前，并同步修改闹钟或提醒。
+hidden_constraints:
+- 只需要关注明早第一个关键日程。
+- 需要结合天气与交通异常，而不是只看固定通勤时间。
+- 结论应体现在新的起床时间或出门时间上。
+- 若无需提前，也应明确说明原因。
+suggested_plan:
+- 读取明天早上的首个日程及地点。
+- 查询对应时段的天气与路线耗时。
+- 计算所需缓冲并调整闹钟。
+max_steps: 6
+allowed_tools:
+- device:calendar.get_next_event
+- device:schedule.get_next_event
+- device:schedule.list_free_slots
+- device:maps.get_routes
+- device:maps.start_navigation
+- device:maps.get_navigation_status
+- device:events.get_venue_details
+- device:weather.get_forecast
+- device:weather.check_weather
+- device:temperature.check
+- device:alarm.create
+- device:alarm.modify
+- device:alarm.check
+- device:reminder.create
+- device:reminder.check
+- device:timer.create
+- device:timer.check
+- device:travel.get_trip_brief
+- device:power.get_battery_status
+- device:notifications.set_delivery_policy
+world:
+  context:
+    date: '2026-03-19'
+    local_time: '18:10'
+    city: Seattle
+    destination_hint: Downtown Office
+    scenario_source: mobile_implicit_cases_zh
+  state:
+    calendar:
+      next_event:
+        title: Upcoming task
+        start_time: '19:30'
+        location: Downtown Office
+        boarding_buffer_minutes: 30
+    maps:
+      routes_by_destination:
+        Downtown Office:
+        - route_id: route_fast
+          label: Fast route
+          distance_km: 18
+          eta_minutes: 22
+          traffic_level: moderate
+          tolls: false
+        - route_id: route_safe
+          label: Safer route
+          distance_km: 21
+          eta_minutes: 28
+          traffic_level: light
+          tolls: true
+    navigation:
+      active_destination: null
+      active_route_id: null
+      guidance_started: false
+      expected_arrival_time: null
+      selected_route_summary: null
+execution_rules:
+- 只需要关注明早第一个关键日程。
+- 需要结合天气与交通异常，而不是只看固定通勤时间。
+- 结论应体现在新的起床时间或出门时间上。
+- 若无需提前，也应明确说明原因。
+evaluation_rubric: []

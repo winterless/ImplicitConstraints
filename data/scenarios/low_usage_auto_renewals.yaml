@@ -1,0 +1,78 @@
+id: low_usage_auto_renewals
+category: implicit_reasoning
+user_prompt: 帮我找出这个月低活跃但在自动续费的服务，并给我退订入口。
+original_question: 这个月我有哪些没怎么用的自动续费？帮我退掉。
+tool_category: subscriptions_billing
+implicit_reason: 用户要的是“值得取消的自动续费”，而不是所有扣费明细。系统需要先从短信、账单或订阅记录中找出自动续费项目，再结合屏幕使用时长或最近活跃度判断哪些服务“没怎么用”，最后给出退订入口或建议；直接自动退订会涉及风险，默认应先展示候选清单。
+hidden_constraints:
+- 自动续费候选应来自账单、短信或系统订阅记录。
+- “没怎么用”需要结合近一段时间的 App 活跃度。
+- 默认应先展示可退订列表，而不是无确认批量退订。
+- 不同订阅渠道可能对应不同的退订入口。
+suggested_plan:
+- 收集本月自动续费项目和扣款时间。
+- 读取对应应用或服务的近期活跃度。
+- 输出低活跃订阅列表，并附上各自退订链接或入口。
+max_steps: 6
+allowed_tools:
+- device:billing.scan_subscription_charges
+- device:usage.get_app_activity
+- device:subscriptions.get_cancellation_options
+- device:subscriptions.cancel
+- device:payments.get_recent_transaction
+- device:profile.get_user_labels
+- device:documents.parse_pdf
+- device:note.search
+- device:note.open
+- device:reminder.create
+- device:reminder.open
+- device:schedule.list_free_slots
+- device:calendar.get_next_event
+- device:contacts.get_priority_people
+- device:messaging.open_contact_thread
+- device:media.get_watch_history
+- device:media.search_recommendations
+- device:notifications.set_delivery_policy
+- device:timer.create
+- device:alarm.create
+world:
+  context:
+    date: '2026-03-19'
+    local_time: '18:10'
+    city: Seattle
+    destination_hint: Downtown Office
+    scenario_source: mobile_implicit_cases_zh
+  state:
+    calendar:
+      next_event:
+        title: Upcoming task
+        start_time: '19:30'
+        location: Downtown Office
+        boarding_buffer_minutes: 30
+    maps:
+      routes_by_destination:
+        Downtown Office:
+        - route_id: route_fast
+          label: Fast route
+          distance_km: 18
+          eta_minutes: 22
+          traffic_level: moderate
+          tolls: false
+        - route_id: route_safe
+          label: Safer route
+          distance_km: 21
+          eta_minutes: 28
+          traffic_level: light
+          tolls: true
+    navigation:
+      active_destination: null
+      active_route_id: null
+      guidance_started: false
+      expected_arrival_time: null
+      selected_route_summary: null
+execution_rules:
+- 自动续费候选应来自账单、短信或系统订阅记录。
+- “没怎么用”需要结合近一段时间的 App 活跃度。
+- 默认应先展示可退订列表，而不是无确认批量退订。
+- 不同订阅渠道可能对应不同的退订入口。
+evaluation_rubric: []

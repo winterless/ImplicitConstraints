@@ -6,15 +6,17 @@ from pathlib import Path
 import sys
 from typing import Any
 
-from .agent import HeuristicPlanningAgent, QwenPlanningAgent
-from .llm_client import (
-    DEFAULT_ALIYUN_API_KEY_FILE,
-    DEFAULT_ALIYUN_BASE_URL,
-    DEFAULT_ALIYUN_MODEL,
-    ChatCompletionClient,
-    resolve_aliyun_api_key,
+from .agent import BaseAgent, HeuristicPlanningAgent, QwenPlanningAgent
+from .evaluator import BaseScenarioEvaluator, build_evaluator
+from .llm_client import ChatCompletionClient
+from .orchestrator import ScenarioOrchestrator, ScenarioRunError
+from .runtime_config import (
+    DEFAULT_RUNTIME_CONFIG_PATH,
+    RoleRuntimeConfig,
+    RuntimeConfig,
+    load_runtime_config,
+    override_runtime_config,
 )
-from .orchestrator import ScenarioOrchestrator
 from .schemas import load_scenario, load_yaml
 from .tool_registry import ToolRegistry
 from .world import build_world
@@ -43,42 +45,65 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional directory to store the run artifact as <scenario_id>.json.",
     )
     parser.add_argument(
+        "--config",
+        default=DEFAULT_RUNTIME_CONFIG_PATH,
+        help="Runtime config YAML file for agent/world/evaluator roles.",
+    )
+    parser.add_argument(
+        "--agent-mode",
+        choices=["llm", "heuristic"],
+        help="Optional override for the agent role.",
+    )
+    parser.add_argument(
+        "--world-mode",
+        choices=["llm", "mock"],
+        help="Optional override for the world role.",
+    )
+    parser.add_argument(
+        "--evaluator-mode",
+        choices=["llm", "deterministic"],
+        help="Optional override for the evaluator role.",
+    )
+    parser.add_argument(
         "--base-url",
-        default=DEFAULT_ALIYUN_BASE_URL,
-        help="Chat completion base URL.",
+        help="Optional global override for all LLM role base URLs.",
     )
     parser.add_argument(
         "--model",
-        default=DEFAULT_ALIYUN_MODEL,
-        help="Model ID. DataBot uses qwen-plus by default on DashScope compatible mode.",
+        help="Optional global override for all LLM role models.",
     )
     parser.add_argument(
         "--api-key",
         default="",
-        help="Optional API key. If empty, read DASHSCOPE_API_KEY / ALIYUN_API_KEY / .secrets file.",
+        help="Optional global API key override for all LLM roles.",
+    )
+    parser.add_argument(
+        "--api-key-env",
+        help="Optional global API key env var override for all LLM roles.",
     )
     parser.add_argument(
         "--api-key-file",
-        default=DEFAULT_ALIYUN_API_KEY_FILE,
-        help="Optional API key file path.",
+        help="Optional global API key file override for all LLM roles.",
     )
     parser.add_argument(
         "--timeout",
         type=int,
-        default=120,
-        help="Chat request timeout in seconds.",
+        help="Optional global timeout override for all LLM roles.",
     )
     parser.add_argument(
         "--retries",
         type=int,
-        default=2,
-        help="Retry count for chat requests.",
+        help="Optional global retry override for all LLM roles.",
     )
     parser.add_argument(
-        "--world-mode",
-        required=True,
-        choices=["mock", "llm"],
-        help="Execution mode for the world model.",
+        "--temperature",
+        type=float,
+        help="Optional global temperature override for all LLM roles.",
+    )
+    parser.add_argument(
+        "--allow-missing-api-key",
+        action="store_true",
+        help="Allow all LLM roles to run without an API key, useful for local compatible endpoints.",
     )
     return parser
 
@@ -87,43 +112,42 @@ def main() -> None:
     args = build_parser().parse_args()
 
     registry = ToolRegistry.from_directory(args.tool_dir)
-    resolved_api_key = resolve_aliyun_api_key(
-        api_key=args.api_key,
+    runtime_config = override_runtime_config(
+        load_runtime_config(args.config),
+        agent_mode=args.agent_mode,
+        world_mode=args.world_mode,
+        evaluator_mode=args.evaluator_mode,
+        base_url=args.base_url,
+        model=args.model,
+        api_key_env=args.api_key_env,
         api_key_file=args.api_key_file,
+        require_api_key=False if args.allow_missing_api_key else None,
+        timeout_s=args.timeout,
+        retries=args.retries,
+        temperature=args.temperature,
     )
-    if args.world_mode == "llm" and not resolved_api_key:
-        raise SystemExit(
-            "world-mode=llm requires an API key. Set DASHSCOPE_API_KEY / ALIYUN_API_KEY or pass --api-key."
-        )
-    llm_client: ChatCompletionClient | None = None
-    if resolved_api_key:
-        llm_client = ChatCompletionClient(
-            base_url=args.base_url,
-            model=args.model,
-            api_key=resolved_api_key,
-            timeout_s=args.timeout,
-            retries=args.retries,
-        )
-        agent = QwenPlanningAgent(client=llm_client)
-    else:
-        print(
-            "No API key found; falling back to local heuristic agent.",
-            file=sys.stderr,
-        )
-        agent = HeuristicPlanningAgent()
+    agent = _build_agent(runtime_config.agent, api_key=args.api_key)
+    world_client = None
+    if runtime_config.world.mode == "llm":
+        world_client = _require_role_client(runtime_config.world, role_name="world", api_key=args.api_key)
+    evaluator = _build_evaluator(runtime_config.evaluator, api_key=args.api_key)
 
     if args.scenario:
         scenario_path = Path(args.scenario)
-        result = _run_single_scenario(
-            scenario_path,
-            registry,
-            agent,
-            world_mode=args.world_mode,
-            llm_client=llm_client,
+        result = _execute_scenario(
+            scenario_path=scenario_path,
+            registry=registry,
+            agent=agent,
+            world_mode=runtime_config.world.mode,
+            world_client=world_client,
+            evaluator=evaluator,
+            runtime_config=runtime_config,
         )
         output_path = _single_output_path(result["scenario_id"], args.output)
         _write_json(output_path, result)
         print(json.dumps(result, ensure_ascii=False, indent=2))
+        if result["status"] == "failed":
+            raise SystemExit(1)
         return
 
     scenario_paths = _discover_executable_scenarios(Path(args.scenario_dir))
@@ -144,16 +168,18 @@ def main() -> None:
     }
 
     for scenario_path in scenario_paths:
-        try:
-            result = _run_single_scenario(
-                scenario_path,
-                registry,
-                agent,
-                world_mode=args.world_mode,
-                llm_client=llm_client,
-            )
-            output_path = batch_output_dir / f"{result['scenario_id']}.json"
-            _write_json(output_path, result)
+        result = _execute_scenario(
+            scenario_path=scenario_path,
+            registry=registry,
+            agent=agent,
+            world_mode=runtime_config.world.mode,
+            world_client=world_client,
+            evaluator=evaluator,
+            runtime_config=runtime_config,
+        )
+        output_path = batch_output_dir / f"{result['scenario_id']}.json"
+        _write_json(output_path, result)
+        if result["status"] == "completed":
             summary["completed_scenarios"] += 1
             summary["results"].append(
                 {
@@ -171,16 +197,21 @@ def main() -> None:
                 f"[completed] {result['scenario_id']} -> {output_path}",
                 file=sys.stderr,
             )
-        except Exception as exc:
+        else:
             summary["failed_scenarios"] += 1
             summary["results"].append(
                 {
                     "scenario_path": str(scenario_path),
+                    "scenario_id": result["scenario_id"],
                     "status": "failed",
-                    "error": str(exc),
+                    "output_path": str(output_path),
+                    "error": result.get("error", "Unknown error"),
                 }
             )
-            print(f"[failed] {scenario_path}: {exc}", file=sys.stderr)
+            print(
+                f"[failed] {result['scenario_id']} -> {output_path}: {result.get('error', 'Unknown error')}",
+                file=sys.stderr,
+            )
 
     summary_path = batch_output_dir / "_summary.json"
     _write_json(summary_path, summary)
@@ -190,24 +221,77 @@ def main() -> None:
 def _run_single_scenario(
     scenario_path: Path,
     registry: ToolRegistry,
-    agent: HeuristicPlanningAgent | QwenPlanningAgent,
+    agent: BaseAgent,
     world_mode: str,
-    llm_client: ChatCompletionClient | None,
+    world_client: ChatCompletionClient | None,
+    evaluator: BaseScenarioEvaluator,
+    runtime_config: RuntimeConfig,
 ) -> dict[str, Any]:
     scenario = load_scenario(scenario_path)
     world = build_world(
         scenario=scenario,
         registry=registry,
         mode=world_mode,
-        client=llm_client,
+        client=world_client,
     )
     orchestrator = ScenarioOrchestrator(
         scenario=scenario,
         registry=registry,
         agent=agent,
         world=world,
+        evaluator=evaluator,
     )
-    return orchestrator.run()
+    result = orchestrator.run()
+    result["runtime_config"] = _runtime_config_snapshot(runtime_config)
+    return result
+
+
+def _execute_scenario(
+    *,
+    scenario_path: Path,
+    registry: ToolRegistry,
+    agent: BaseAgent,
+    world_mode: str,
+    world_client: ChatCompletionClient | None,
+    evaluator: BaseScenarioEvaluator,
+    runtime_config: RuntimeConfig,
+) -> dict[str, Any]:
+    try:
+        return _run_single_scenario(
+            scenario_path=scenario_path,
+            registry=registry,
+            agent=agent,
+            world_mode=world_mode,
+            world_client=world_client,
+            evaluator=evaluator,
+            runtime_config=runtime_config,
+        )
+    except ScenarioRunError as exc:
+        artifact = dict(exc.artifact)
+        artifact["runtime_config"] = _runtime_config_snapshot(runtime_config)
+        return artifact
+    except Exception as exc:
+        scenario = load_scenario(scenario_path)
+        return {
+            "status": "failed",
+            "scenario_id": scenario.scenario_id,
+            "category": scenario.category,
+            "user_prompt": scenario.user_prompt,
+            "input_snapshot": {
+                "context": scenario.context,
+                "allowed_tools": registry.export_for_keys(scenario.allowed_tools),
+                "agent_mode": agent.mode,
+                "world_mode": world_mode,
+                "evaluator_mode": evaluator.mode,
+            },
+            "messages": [],
+            "model_logs": [],
+            "world_logs": [],
+            "final_world_state": scenario.state,
+            "evaluation": None,
+            "error": str(exc),
+            "runtime_config": _runtime_config_snapshot(runtime_config),
+        }
 
 
 def _discover_executable_scenarios(directory: Path) -> list[Path]:
@@ -243,6 +327,79 @@ def _batch_output_dir(output_dir: str | None) -> Path:
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _build_agent(config: RoleRuntimeConfig, api_key: str) -> BaseAgent:
+    if config.mode == "heuristic":
+        return HeuristicPlanningAgent()
+    client = _require_role_client(config, role_name="agent", api_key=api_key)
+    return QwenPlanningAgent(client=client)
+
+
+def _build_evaluator(config: RoleRuntimeConfig, api_key: str) -> BaseScenarioEvaluator:
+    client = None
+    if config.mode == "llm":
+        client = _require_role_client(config, role_name="evaluator", api_key=api_key)
+    return build_evaluator(config.mode, client=client)
+
+
+def _build_role_client(config: RoleRuntimeConfig, api_key: str) -> ChatCompletionClient | None:
+    if config.mode not in {"llm"}:
+        return None
+    api_key_envs = tuple(
+        part.strip()
+        for part in config.api_key_env.split(",")
+        if part.strip()
+    )
+    return ChatCompletionClient(
+        base_url=config.base_url,
+        model=config.model,
+        api_key=api_key,
+        api_key_file=config.api_key_file,
+        api_key_envs=api_key_envs,
+        require_api_key=config.require_api_key,
+        timeout_s=config.timeout_s,
+        retries=config.retries,
+        temperature=config.temperature,
+    )
+
+
+def _require_role_client(
+    config: RoleRuntimeConfig,
+    *,
+    role_name: str,
+    api_key: str,
+) -> ChatCompletionClient:
+    try:
+        client = _build_role_client(config, api_key=api_key)
+    except ValueError as exc:
+        raise SystemExit(f"{role_name} role requires a usable LLM client: {exc}") from exc
+    if client is None:
+        raise SystemExit(f"{role_name} role is not configured to use an LLM client.")
+    return client
+
+
+def _runtime_config_snapshot(config: RuntimeConfig) -> dict[str, Any]:
+    return {
+        "agent": _role_config_snapshot(config.agent),
+        "world": _role_config_snapshot(config.world),
+        "evaluator": _role_config_snapshot(config.evaluator),
+    }
+
+
+def _role_config_snapshot(config: RoleRuntimeConfig) -> dict[str, Any]:
+    return {
+        "mode": config.mode,
+        "provider": config.provider,
+        "base_url": config.base_url,
+        "model": config.model,
+        "api_key_env": config.api_key_env,
+        "api_key_file": config.api_key_file,
+        "require_api_key": config.require_api_key,
+        "timeout_s": config.timeout_s,
+        "retries": config.retries,
+        "temperature": config.temperature,
+    }
 
 
 if __name__ == "__main__":

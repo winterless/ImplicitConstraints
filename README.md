@@ -5,8 +5,9 @@
 - MCP 风格的 mock 工具接口
 - 单场景 YAML 加载
 - 可插拔 agent
+- 可分别配置的 `agent / world / evaluator` 三个角色
 - 可切换的 world model（deterministic mock / LLM world model）
-- criterion-level evaluator
+- evaluator 支持 deterministic checks 或 LLM judge
 - 一个 `route + time` 的完整 demo
 
 ## Demo 内容
@@ -32,10 +33,13 @@ python -m pip install -e .
 
 ## 运行
 
+默认会读取根目录下的 `llm_config.yaml`。如果不额外传参数，`agent / world / evaluator` 三个角色都会按配置文件运行；仓库默认配置是三者都走 LLM。
+
+如果你已经在配置文件里填好了可用的 LLM endpoint / API key，直接运行：
+
 ```bash
 python -m implicit_constraints_demo.main \
-  --scenario data/scenarios/airport_route_time.yaml \
-  --world-mode mock
+  --scenario data/scenarios/airport_route_time.yaml
 ```
 
 如果你想强制使用本地 deterministic world：
@@ -94,23 +98,68 @@ runs/batch/
 runs/batch/_summary.json
 ```
 
-## 模型 API
+## 模型配置
 
-当前 agent 默认按 `DataBot` 里的调用方式接 `DashScope` 兼容接口：
+默认配置文件：`llm_config.yaml`
+
+```yaml
+agent:
+  mode: llm
+  provider: openai_compatible
+  base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
+  model: qwen-plus
+  api_key_env: DASHSCOPE_API_KEY,ALIYUN_API_KEY
+  api_key_file: .secrets/alicloud_api_key.txt
+  require_api_key: true
+```
+
+三个角色都可以独立配置：
+
+- `agent`: 负责推理和选工具
+- `world`: 负责模拟 MCP / 工具返回值
+- `evaluator`: 负责给最终运行结果打分
+
+`mode` 支持：
+
+- `agent`: `llm | heuristic`
+- `world`: `llm | mock`
+- `evaluator`: `llm | deterministic`
+
+当前默认按 `DashScope` 兼容接口配置：
 
 - `base_url`: `https://dashscope.aliyuncs.com/compatible-mode/v1`
 - `model`: `qwen-plus`
 
+如果要切到本地 OpenAI-compatible 服务，可以直接改配置文件，例如：
+
+```yaml
+world:
+  mode: llm
+  provider: local_openai_compatible
+  base_url: http://127.0.0.1:8000/v1
+  model: qwen2.5-7b-instruct
+  api_key_env: ""
+  api_key_file: ""
+  require_api_key: false
+```
+
 API key 读取顺序：
 
 1. `--api-key`
-2. 环境变量 `DASHSCOPE_API_KEY`
-3. 环境变量 `ALIYUN_API_KEY`
-4. `.secrets/alicloud_api_key.txt`
+2. 该角色配置里的 `api_key_env`
+3. 该角色配置里的 `api_key_file`
 
 `.secrets/` 已加入 `.gitignore`，避免误提交密钥。
 
-如果没有配置 API key，可以配合 `--world-mode mock` 使用；若选择 `--world-mode llm`，CLI 会直接报错而不是自动回退。`--world-mode` 现在必须显式传入。
+常用覆盖参数：
+
+- `--config llm_config.yaml`
+- `--agent-mode heuristic`
+- `--world-mode mock`
+- `--evaluator-mode deterministic`
+- `--base-url ...`
+- `--model ...`
+- `--allow-missing-api-key`
 
 ## 目录结构
 
@@ -132,7 +181,7 @@ src/implicit_constraints_demo/
 
 - 先做少量高质量 demo，不追求大而全
 - 工具接口优先做成 MCP 风格，方便后续替换成真实 server
-- evaluator 先做 deterministic checks，避免过早引入额外 LLM 漂移
+- evaluator 同时支持 deterministic checks 和 LLM judge，前者更稳，后者更适合 rubric 尚未补全的场景
 - agent 保持可插拔，目前内置一个基于 Qwen API 的 planning agent
 
 ## 下一步可扩展方向

@@ -1,0 +1,1322 @@
+catalog_id: mobile_assistant_mcp_tools
+catalog_type: tool_schema_catalog
+server: device
+description: 面向中文移动端隐式约束场景的 MCP 风格工具清单。tool_name 保持纯英文，其他说明以中文为主。
+tools:
+  - tool_name: photos.search_by_metadata
+    description: 按时间、地点、相册、关键词等元数据检索照片。
+    input_schema:
+      type: object
+      properties:
+        start_date:
+          type: string
+        end_date:
+          type: string
+        location_query:
+          type: string
+        album:
+          type: string
+        keyword:
+          type: string
+      required: []
+    read_only: true
+    success_response_schema:
+      type: object
+      properties:
+        photos:
+          type: array
+    state_changes: []
+    failure_conditions:
+      - no photo matched the metadata filters
+
+  - tool_name: vision.match_landmark
+    description: 对候选图片做地标或场景视觉匹配。
+    input_schema:
+      type: object
+      properties:
+        photo_ids:
+          type: array
+        landmark_name:
+          type: string
+      required:
+        - landmark_name
+    read_only: true
+    success_response_schema:
+      type: object
+      properties:
+        matched_photo_ids:
+          type: array
+    state_changes: []
+    failure_conditions:
+      - landmark visual signature not available
+
+  - tool_name: face.match_people
+    description: 在端侧对候选照片做人脸匹配，筛出包含指定人物的结果。
+    input_schema:
+      type: object
+      properties:
+        photo_ids:
+          type: array
+        people:
+          type: array
+        match_mode:
+          type: string
+      required:
+        - people
+    read_only: true
+    success_response_schema:
+      type: object
+      properties:
+        matched_photo_ids:
+          type: array
+    state_changes: []
+    failure_conditions:
+      - face profile missing for one or more requested people
+
+  - tool_name: focus.start_session
+    description: 开启一个指定时长的专注会话。
+    input_schema:
+      type: object
+      properties:
+        duration_minutes:
+          type: integer
+        title:
+          type: string
+      required:
+        - duration_minutes
+    read_only: false
+    success_response_schema:
+      type: object
+      properties:
+        session_id:
+          type: string
+        ends_at:
+          type: string
+    state_changes:
+      - focus.active_session
+    failure_conditions:
+      - another focus session is already active
+
+  - tool_name: contacts.get_priority_people
+    description: 按联系人标签、关系或身份提取高优先级联系人。
+    input_schema:
+      type: object
+      properties:
+        labels:
+          type: array
+      required:
+        - labels
+    read_only: true
+    success_response_schema:
+      type: object
+      properties:
+        contacts:
+          type: array
+    state_changes: []
+    failure_conditions:
+      - no contacts found for the requested labels
+
+  - tool_name: notifications.set_delivery_policy
+    description: 配置通知投递策略，例如白名单放行、其余静音。
+    input_schema:
+      type: object
+      properties:
+        whitelist_contact_ids:
+          type: array
+        allow_calls:
+          type: boolean
+        allow_messages:
+          type: boolean
+        mute_other_notifications:
+          type: boolean
+        duration_minutes:
+          type: integer
+      required:
+        - mute_other_notifications
+    read_only: false
+    success_response_schema:
+      type: object
+      properties:
+        policy_id:
+          type: string
+        applied:
+          type: boolean
+    state_changes:
+      - notifications.delivery_policy
+    failure_conditions:
+      - notification access permission is missing
+
+  - tool_name: timer.create
+    description: 创建一个倒计时。
+    input_schema:
+      type: object
+      properties:
+        duration_seconds:
+          type: integer
+        label:
+          type: string
+      required:
+        - duration_seconds
+    read_only: false
+    success_response_schema:
+      type: object
+      properties:
+        timer_id:
+          type: string
+        ends_at:
+          type: string
+    state_changes:
+      - timers[*]
+    failure_conditions:
+      - duration is invalid
+
+  - tool_name: timer.open
+    description: 打开指定倒计时详情或倒计时应用界面。
+    input_schema:
+      type: object
+      properties:
+        timer_id:
+          type: string
+      required: []
+    read_only: true
+    success_response_schema:
+      type: object
+      properties:
+        opened:
+          type: boolean
+    state_changes: []
+    failure_conditions:
+      - timer not found
+
+  - tool_name: timer.check
+    description: 查看倒计时状态。
+    input_schema:
+      type: object
+      properties:
+        timer_id:
+          type: string
+      required:
+        - timer_id
+    read_only: true
+    success_response_schema:
+      type: object
+      properties:
+        timer:
+          type: object
+    state_changes: []
+    failure_conditions:
+      - timer not found
+
+  - tool_name: timer.modify
+    description: 修改倒计时时长或标签。
+    input_schema:
+      type: object
+      properties:
+        timer_id:
+          type: string
+        duration_seconds:
+          type: integer
+        label:
+          type: string
+      required:
+        - timer_id
+    read_only: false
+    success_response_schema:
+      type: object
+      properties:
+        updated:
+          type: boolean
+    state_changes:
+      - timers[*]
+    failure_conditions:
+      - timer not found
+
+  - tool_name: timer.cancel
+    description: 取消指定倒计时。
+    input_schema:
+      type: object
+      properties:
+        timer_id:
+          type: string
+      required:
+        - timer_id
+    read_only: false
+    success_response_schema:
+      type: object
+      properties:
+        cancelled:
+          type: boolean
+    state_changes:
+      - timers[*]
+    failure_conditions:
+      - timer not found
+
+  - tool_name: power.get_battery_status
+    description: 获取当前电量、预计续航和高耗电应用信息。
+    input_schema:
+      type: object
+      properties: {}
+      required: []
+    read_only: true
+    success_response_schema:
+      type: object
+      properties:
+        battery:
+          type: object
+    state_changes: []
+    failure_conditions: []
+
+  - tool_name: power.freeze_background_apps
+    description: 冻结高耗电后台应用或限制其后台活动。
+    input_schema:
+      type: object
+      properties:
+        app_ids:
+          type: array
+        strategy:
+          type: string
+      required:
+        - app_ids
+    read_only: false
+    success_response_schema:
+      type: object
+      properties:
+        affected_apps:
+          type: array
+    state_changes:
+      - power.restricted_apps
+    failure_conditions:
+      - one or more apps cannot be restricted
+
+  - tool_name: power.apply_saving_plan
+    description: 应用省电方案，例如降亮度、关蜂窝、限制刷新率等。
+    input_schema:
+      type: object
+      properties:
+        brightness_percent:
+          type: integer
+        disable_cellular:
+          type: boolean
+        disable_wifi:
+          type: boolean
+        low_power_mode:
+          type: boolean
+      required: []
+    read_only: false
+    success_response_schema:
+      type: object
+      properties:
+        applied:
+          type: boolean
+    state_changes:
+      - power.saving_plan
+    failure_conditions:
+      - requested saving plan conflicts with active emergency settings
+
+  - tool_name: billing.scan_subscription_charges
+    description: 扫描账单、短信或支付记录中的自动续费项目。
+    input_schema:
+      type: object
+      properties:
+        start_date:
+          type: string
+        end_date:
+          type: string
+      required: []
+    read_only: true
+    success_response_schema:
+      type: object
+      properties:
+        subscriptions:
+          type: array
+    state_changes: []
+    failure_conditions:
+      - billing data source unavailable
+
+  - tool_name: usage.get_app_activity
+    description: 获取应用的近期使用时长、打开次数和活跃度。
+    input_schema:
+      type: object
+      properties:
+        app_ids:
+          type: array
+        days:
+          type: integer
+      required: []
+    read_only: true
+    success_response_schema:
+      type: object
+      properties:
+        activities:
+          type: array
+    state_changes: []
+    failure_conditions:
+      - usage statistics permission is missing
+
+  - tool_name: subscriptions.get_cancellation_options
+    description: 获取订阅项对应的退订入口、平台和操作建议。
+    input_schema:
+      type: object
+      properties:
+        subscription_ids:
+          type: array
+      required:
+        - subscription_ids
+    read_only: true
+    success_response_schema:
+      type: object
+      properties:
+        options:
+          type: array
+    state_changes: []
+    failure_conditions:
+      - no cancellation route found for one or more subscriptions
+
+  - tool_name: subscriptions.cancel
+    description: 对指定订阅执行正式退订。
+    input_schema:
+      type: object
+      properties:
+        subscription_id:
+          type: string
+        confirmed:
+          type: boolean
+      required:
+        - subscription_id
+        - confirmed
+    read_only: false
+    success_response_schema:
+      type: object
+      properties:
+        cancelled:
+          type: boolean
+    state_changes:
+      - subscriptions[*]
+    failure_conditions:
+      - confirmation missing
+      - provider requires external authorization
+
+  - tool_name: documents.parse_pdf
+    description: 解析 PDF 的正文、结构、表格和页码信息。
+    input_schema:
+      type: object
+      properties:
+        document_id:
+          type: string
+      required:
+        - document_id
+    read_only: true
+    success_response_schema:
+      type: object
+      properties:
+        parsed_document:
+          type: object
+    state_changes: []
+    failure_conditions:
+      - pdf parsing failed
+
+  - tool_name: profile.get_user_labels
+    description: 获取用户的角色、项目归属、管理关系和偏好标签。
+    input_schema:
+      type: object
+      properties: {}
+      required: []
+    read_only: true
+    success_response_schema:
+      type: object
+      properties:
+        labels:
+          type: array
+    state_changes: []
+    failure_conditions: []
+
+  - tool_name: rag.retrieve_personal_context
+    description: 基于本地知识和用户标签检索与当前任务相关的上下文。
+    input_schema:
+      type: object
+      properties:
+        query:
+          type: string
+        labels:
+          type: array
+      required:
+        - query
+    read_only: true
+    success_response_schema:
+      type: object
+      properties:
+        passages:
+          type: array
+    state_changes: []
+    failure_conditions:
+      - no relevant local context found
+
+  - tool_name: tasks.extract_action_items
+    description: 从文档或上下文中提取行动项、截止时间和责任人。
+    input_schema:
+      type: object
+      properties:
+        content:
+          type: string
+      required:
+        - content
+    read_only: true
+    success_response_schema:
+      type: object
+      properties:
+        action_items:
+          type: array
+    state_changes: []
+    failure_conditions:
+      - content is empty
+
+  - tool_name: schedule.get_next_event
+    description: 获取日程中的下一个事件，可作为 calendar.get_next_event 的扩展别名。
+    input_schema:
+      type: object
+      properties: {}
+      required: []
+    read_only: true
+    success_response_schema:
+      type: object
+      properties:
+        event:
+          type: object
+    state_changes: []
+    failure_conditions: []
+
+  - tool_name: schedule.list_free_slots
+    description: 查询某个时间范围内的空闲日程窗口。
+    input_schema:
+      type: object
+      properties:
+        start_time:
+          type: string
+        end_time:
+          type: string
+      required:
+        - start_time
+        - end_time
+    read_only: true
+    success_response_schema:
+      type: object
+      properties:
+        slots:
+          type: array
+    state_changes: []
+    failure_conditions:
+      - calendar source unavailable
+
+  - tool_name: events.get_venue_details
+    description: 获取活动场馆地址、入场建议和开始时间等信息。
+    input_schema:
+      type: object
+      properties:
+        event_name:
+          type: string
+        city:
+          type: string
+      required:
+        - event_name
+    read_only: true
+    success_response_schema:
+      type: object
+      properties:
+        venue:
+          type: object
+    state_changes: []
+    failure_conditions:
+      - venue details not found
+
+  - tool_name: weather.get_forecast
+    description: 获取指定地点和时段的天气预报。
+    input_schema:
+      type: object
+      properties:
+        location:
+          type: string
+        date:
+          type: string
+        time_range:
+          type: string
+      required:
+        - location
+    read_only: true
+    success_response_schema:
+      type: object
+      properties:
+        forecast:
+          type: object
+    state_changes: []
+    failure_conditions:
+      - forecast not available
+
+  - tool_name: weather.check_weather
+    description: 提供更口语化命名的天气查询接口。
+    input_schema:
+      type: object
+      properties:
+        location:
+          type: string
+      required:
+        - location
+    read_only: true
+    success_response_schema:
+      type: object
+      properties:
+        weather:
+          type: object
+    state_changes: []
+    failure_conditions:
+      - forecast not available
+
+  - tool_name: temperature.check
+    description: 查询当前温度或体感温度。
+    input_schema:
+      type: object
+      properties:
+        location:
+          type: string
+      required:
+        - location
+    read_only: true
+    success_response_schema:
+      type: object
+      properties:
+        temperature:
+          type: object
+    state_changes: []
+    failure_conditions:
+      - temperature data source unavailable
+
+  - tool_name: alarm.create
+    description: 创建闹钟。
+    input_schema:
+      type: object
+      properties:
+        time:
+          type: string
+        label:
+          type: string
+        enabled:
+          type: boolean
+      required:
+        - time
+    read_only: false
+    success_response_schema:
+      type: object
+      properties:
+        alarm_id:
+          type: string
+    state_changes:
+      - alarms[*]
+    failure_conditions:
+      - duplicate alarm at the same time
+
+  - tool_name: alarm.open
+    description: 打开闹钟详情或闹钟应用页面。
+    input_schema:
+      type: object
+      properties:
+        alarm_id:
+          type: string
+      required: []
+    read_only: true
+    success_response_schema:
+      type: object
+      properties:
+        opened:
+          type: boolean
+    state_changes: []
+    failure_conditions:
+      - alarm not found
+
+  - tool_name: alarm.check
+    description: 查看闹钟状态。
+    input_schema:
+      type: object
+      properties:
+        alarm_id:
+          type: string
+      required:
+        - alarm_id
+    read_only: true
+    success_response_schema:
+      type: object
+      properties:
+        alarm:
+          type: object
+    state_changes: []
+    failure_conditions:
+      - alarm not found
+
+  - tool_name: alarm.modify
+    description: 修改闹钟时间、标签或启用状态。
+    input_schema:
+      type: object
+      properties:
+        alarm_id:
+          type: string
+        time:
+          type: string
+        label:
+          type: string
+        enabled:
+          type: boolean
+      required:
+        - alarm_id
+    read_only: false
+    success_response_schema:
+      type: object
+      properties:
+        updated:
+          type: boolean
+    state_changes:
+      - alarms[*]
+    failure_conditions:
+      - alarm not found
+
+  - tool_name: alarm.cancel
+    description: 暂停或关闭指定闹钟。
+    input_schema:
+      type: object
+      properties:
+        alarm_id:
+          type: string
+      required:
+        - alarm_id
+    read_only: false
+    success_response_schema:
+      type: object
+      properties:
+        cancelled:
+          type: boolean
+    state_changes:
+      - alarms[*]
+    failure_conditions:
+      - alarm not found
+
+  - tool_name: alarm.delete
+    description: 删除闹钟。
+    input_schema:
+      type: object
+      properties:
+        alarm_id:
+          type: string
+      required:
+        - alarm_id
+    read_only: false
+    success_response_schema:
+      type: object
+      properties:
+        deleted:
+          type: boolean
+    state_changes:
+      - alarms[*]
+    failure_conditions:
+      - alarm not found
+
+  - tool_name: travel.get_trip_brief
+    description: 获取近期出差或旅行的目的地、日期和停留时长。
+    input_schema:
+      type: object
+      properties:
+        date:
+          type: string
+      required: []
+    read_only: true
+    success_response_schema:
+      type: object
+      properties:
+        trip:
+          type: object
+    state_changes: []
+    failure_conditions:
+      - no trip found
+
+  - tool_name: luggage.scan_items
+    description: 识别行李箱中已放入的物品。
+    input_schema:
+      type: object
+      properties:
+        source:
+          type: string
+      required: []
+    read_only: true
+    success_response_schema:
+      type: object
+      properties:
+        items:
+          type: array
+    state_changes: []
+    failure_conditions:
+      - luggage scan unavailable
+
+  - tool_name: packing.suggest_missing_items
+    description: 基于行程、天气和已装物品推断可能遗漏的行李。
+    input_schema:
+      type: object
+      properties:
+        destination:
+          type: string
+        days:
+          type: integer
+        weather_summary:
+          type: string
+        packed_items:
+          type: array
+      required:
+        - destination
+        - packed_items
+    read_only: true
+    success_response_schema:
+      type: object
+      properties:
+        missing_items:
+          type: array
+    state_changes: []
+    failure_conditions:
+      - packing heuristic failed
+
+  - tool_name: cooking.get_recipe
+    description: 获取指定菜品的步骤、时长和关键提醒。
+    input_schema:
+      type: object
+      properties:
+        dish_name:
+          type: string
+      required:
+        - dish_name
+    read_only: true
+    success_response_schema:
+      type: object
+      properties:
+        recipe:
+          type: object
+    state_changes: []
+    failure_conditions:
+      - recipe not found
+
+  - tool_name: reminder.create
+    description: 创建提醒事项。
+    input_schema:
+      type: object
+      properties:
+        title:
+          type: string
+        remind_at:
+          type: string
+        note:
+          type: string
+      required:
+        - title
+    read_only: false
+    success_response_schema:
+      type: object
+      properties:
+        reminder_id:
+          type: string
+    state_changes:
+      - reminders[*]
+    failure_conditions:
+      - invalid reminder time
+
+  - tool_name: reminder.open
+    description: 打开提醒事项详情。
+    input_schema:
+      type: object
+      properties:
+        reminder_id:
+          type: string
+      required: []
+    read_only: true
+    success_response_schema:
+      type: object
+      properties:
+        opened:
+          type: boolean
+    state_changes: []
+    failure_conditions:
+      - reminder not found
+
+  - tool_name: reminder.check
+    description: 查看提醒事项状态。
+    input_schema:
+      type: object
+      properties:
+        reminder_id:
+          type: string
+      required:
+        - reminder_id
+    read_only: true
+    success_response_schema:
+      type: object
+      properties:
+        reminder:
+          type: object
+    state_changes: []
+    failure_conditions:
+      - reminder not found
+
+  - tool_name: reminder.modify
+    description: 修改提醒事项。
+    input_schema:
+      type: object
+      properties:
+        reminder_id:
+          type: string
+        title:
+          type: string
+        remind_at:
+          type: string
+        note:
+          type: string
+      required:
+        - reminder_id
+    read_only: false
+    success_response_schema:
+      type: object
+      properties:
+        updated:
+          type: boolean
+    state_changes:
+      - reminders[*]
+    failure_conditions:
+      - reminder not found
+
+  - tool_name: reminder.cancel
+    description: 取消提醒事项。
+    input_schema:
+      type: object
+      properties:
+        reminder_id:
+          type: string
+      required:
+        - reminder_id
+    read_only: false
+    success_response_schema:
+      type: object
+      properties:
+        cancelled:
+          type: boolean
+    state_changes:
+      - reminders[*]
+    failure_conditions:
+      - reminder not found
+
+  - tool_name: reminder.delete
+    description: 删除提醒事项。
+    input_schema:
+      type: object
+      properties:
+        reminder_id:
+          type: string
+      required:
+        - reminder_id
+    read_only: false
+    success_response_schema:
+      type: object
+      properties:
+        deleted:
+          type: boolean
+    state_changes:
+      - reminders[*]
+    failure_conditions:
+      - reminder not found
+
+  - tool_name: home.create_arrival_automation
+    description: 创建基于到家 ETA 的智能家居自动化。
+    input_schema:
+      type: object
+      properties:
+        eta_threshold_minutes:
+          type: integer
+        devices:
+          type: array
+        action:
+          type: string
+      required:
+        - eta_threshold_minutes
+        - devices
+    read_only: false
+    success_response_schema:
+      type: object
+      properties:
+        automation_id:
+          type: string
+    state_changes:
+      - home.automations[*]
+    failure_conditions:
+      - smart home permission missing
+
+  - tool_name: home.execute_scene
+    description: 执行智能家居场景或一组设备动作。
+    input_schema:
+      type: object
+      properties:
+        scene_name:
+          type: string
+        devices:
+          type: array
+        action:
+          type: string
+      required: []
+    read_only: false
+    success_response_schema:
+      type: object
+      properties:
+        executed:
+          type: boolean
+    state_changes:
+      - home.devices
+    failure_conditions:
+      - scene execution failed
+
+  - tool_name: home.get_safety_status
+    description: 读取门锁、窗户、灯光、安防等家居状态。
+    input_schema:
+      type: object
+      properties: {}
+      required: []
+    read_only: true
+    success_response_schema:
+      type: object
+      properties:
+        safety_status:
+          type: object
+    state_changes: []
+    failure_conditions:
+      - home hub unavailable
+
+  - tool_name: sleep_mode.enable
+    description: 开启设备或家庭的睡眠模式。
+    input_schema:
+      type: object
+      properties:
+        mode_name:
+          type: string
+      required: []
+    read_only: false
+    success_response_schema:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+    state_changes:
+      - sleep_mode
+    failure_conditions:
+      - sleep mode unavailable
+
+  - tool_name: messaging.open_contact_thread
+    description: 打开指定联系人的对话窗口或分享界面。
+    input_schema:
+      type: object
+      properties:
+        contact_name:
+          type: string
+        intent:
+          type: string
+      required:
+        - contact_name
+    read_only: false
+    success_response_schema:
+      type: object
+      properties:
+        thread_id:
+          type: string
+        opened:
+          type: boolean
+    state_changes:
+      - messaging.last_opened_thread
+    failure_conditions:
+      - contact not found
+
+  - tool_name: photos.prepare_share_bundle
+    description: 把候选照片打包成可分享集合。
+    input_schema:
+      type: object
+      properties:
+        photo_ids:
+          type: array
+        bundle_name:
+          type: string
+      required:
+        - photo_ids
+    read_only: false
+    success_response_schema:
+      type: object
+      properties:
+        bundle_id:
+          type: string
+    state_changes:
+      - photos.share_bundles[*]
+    failure_conditions:
+      - no photos selected
+
+  - tool_name: payments.get_recent_transaction
+    description: 读取最近支付记录并按时间、金额或商户筛选。
+    input_schema:
+      type: object
+      properties:
+        start_time:
+          type: string
+        end_time:
+          type: string
+        merchant_hint:
+          type: string
+      required: []
+    read_only: true
+    success_response_schema:
+      type: object
+      properties:
+        transactions:
+          type: array
+    state_changes: []
+    failure_conditions:
+      - payment data unavailable
+
+  - tool_name: chat.get_group_context
+    description: 获取群聊参与人、标题和最近上下文。
+    input_schema:
+      type: object
+      properties:
+        group_name:
+          type: string
+        time_hint:
+          type: string
+      required: []
+    read_only: true
+    success_response_schema:
+      type: object
+      properties:
+        group:
+          type: object
+    state_changes: []
+    failure_conditions:
+      - target group not found
+
+  - tool_name: payments.create_group_split
+    description: 按参与人生成群收款或 AA 请求。
+    input_schema:
+      type: object
+      properties:
+        group_id:
+          type: string
+        total_amount:
+          type: number
+        participant_ids:
+          type: array
+        include_self:
+          type: boolean
+      required:
+        - total_amount
+        - participant_ids
+    read_only: false
+    success_response_schema:
+      type: object
+      properties:
+        split_request_id:
+          type: string
+    state_changes:
+      - payments.pending_split_requests[*]
+    failure_conditions:
+      - invalid participant set
+
+  - tool_name: media.get_watch_history
+    description: 获取用户近期观影历史、评分和偏好标签。
+    input_schema:
+      type: object
+      properties:
+        days:
+          type: integer
+      required: []
+    read_only: true
+    success_response_schema:
+      type: object
+      properties:
+        watch_history:
+          type: array
+    state_changes: []
+    failure_conditions: []
+
+  - tool_name: media.search_recommendations
+    description: 根据情绪、类型和已看状态筛选影视推荐。
+    input_schema:
+      type: object
+      properties:
+        mood:
+          type: string
+        excluded_tags:
+          type: array
+        unseen_only:
+          type: boolean
+      required: []
+    read_only: true
+    success_response_schema:
+      type: object
+      properties:
+        recommendations:
+          type: array
+    state_changes: []
+    failure_conditions:
+      - no recommendation matched the filters
+
+  - tool_name: media.open_on_tv
+    description: 在电视端打开指定影片或推荐页。
+    input_schema:
+      type: object
+      properties:
+        media_id:
+          type: string
+      required:
+        - media_id
+    read_only: false
+    success_response_schema:
+      type: object
+      properties:
+        opened:
+          type: boolean
+    state_changes:
+      - media.last_opened_device
+    failure_conditions:
+      - tv device unavailable
+
+  - tool_name: podcasts.list_unheard
+    description: 获取未听播客列表及其时长。
+    input_schema:
+      type: object
+      properties:
+        show_name:
+          type: string
+      required: []
+    read_only: true
+    success_response_schema:
+      type: object
+      properties:
+        episodes:
+          type: array
+    state_changes: []
+    failure_conditions:
+      - podcast library unavailable
+
+  - tool_name: podcasts.play_episode
+    description: 播放指定播客节目。
+    input_schema:
+      type: object
+      properties:
+        episode_id:
+          type: string
+      required:
+        - episode_id
+    read_only: false
+    success_response_schema:
+      type: object
+      properties:
+        playing:
+          type: boolean
+    state_changes:
+      - playback.current_episode
+    failure_conditions:
+      - episode not found
+
+  - tool_name: note.search
+    description: 按标题或正文关键词搜索备忘录。
+    input_schema:
+      type: object
+      properties:
+        query:
+          type: string
+      required:
+        - query
+    read_only: true
+    success_response_schema:
+      type: object
+      properties:
+        notes:
+          type: array
+    state_changes: []
+    failure_conditions:
+      - note index unavailable
+
+  - tool_name: note.check_recovery_status
+    description: 检查备忘录是否有回收站、版本历史或备份能力。
+    input_schema:
+      type: object
+      properties: {}
+      required: []
+    read_only: true
+    success_response_schema:
+      type: object
+      properties:
+        recovery:
+          type: object
+    state_changes: []
+    failure_conditions: []
+
+  - tool_name: note.open
+    description: 打开指定备忘录。
+    input_schema:
+      type: object
+      properties:
+        note_id:
+          type: string
+      required:
+        - note_id
+    read_only: true
+    success_response_schema:
+      type: object
+      properties:
+        note:
+          type: object
+    state_changes: []
+    failure_conditions:
+      - note not found
+
+  - tool_name: note.modify
+    description: 修改备忘录内容。
+    input_schema:
+      type: object
+      properties:
+        note_id:
+          type: string
+        title:
+          type: string
+        content:
+          type: string
+      required:
+        - note_id
+    read_only: false
+    success_response_schema:
+      type: object
+      properties:
+        updated:
+          type: boolean
+    state_changes:
+      - notes[*]
+    failure_conditions:
+      - note not found
+
+  - tool_name: note.delete
+    description: 删除指定备忘录；高风险场景应要求上层先获得用户确认。
+    input_schema:
+      type: object
+      properties:
+        note_ids:
+          type: array
+        confirmed:
+          type: boolean
+      required:
+        - note_ids
+        - confirmed
+    read_only: false
+    success_response_schema:
+      type: object
+      properties:
+        deleted_count:
+          type: integer
+    state_changes:
+      - notes[*]
+      - notes_trash[*]
+    failure_conditions:
+      - confirmation missing
+      - one or more notes cannot be deleted

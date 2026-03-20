@@ -1,0 +1,78 @@
+id: arrive_home_turn_on_devices
+category: implicit_reasoning
+user_prompt: 快到家的时候帮我把家里的空调和热水器提前打开。
+original_question: 等下快到家的时候，把家里的空调和热水器打开。
+tool_category: smart_home
+implicit_reason: 用户不是要立刻开设备，而是要基于到家 ETA 的条件触发自动化。系统需要持续感知回家路线或导航状态，在 ETA 进入阈值区间时静默执行智能家居动作，避免过早开启导致浪费。
+hidden_constraints:
+- 需要明确目标是“快到家”而非立即执行。
+- 应基于 ETA 阈值触发，而不是固定时间触发。
+- 需要同时控制多个设备。
+- 自动化应在后台低打扰完成。
+suggested_plan:
+- 读取当前回家导航状态和 ETA。
+- 创建接近到家时触发的自动化规则。
+- 在 ETA 命中阈值时开启空调和热水器。
+max_steps: 6
+allowed_tools:
+- device:maps.get_routes
+- device:maps.get_navigation_status
+- device:home.create_arrival_automation
+- device:home.execute_scene
+- device:home.get_safety_status
+- device:sleep_mode.enable
+- device:timer.create
+- device:timer.check
+- device:reminder.create
+- device:reminder.check
+- device:notifications.set_delivery_policy
+- device:power.get_battery_status
+- device:weather.get_forecast
+- device:temperature.check
+- device:schedule.get_next_event
+- device:calendar.get_next_event
+- device:alarm.create
+- device:alarm.check
+- device:profile.get_user_labels
+- device:note.search
+world:
+  context:
+    date: '2026-03-19'
+    local_time: '18:10'
+    city: Seattle
+    destination_hint: Home
+    scenario_source: mobile_implicit_cases_zh
+  state:
+    calendar:
+      next_event:
+        title: Upcoming task
+        start_time: '19:30'
+        location: Home
+        boarding_buffer_minutes: 30
+    maps:
+      routes_by_destination:
+        Home:
+        - route_id: route_fast
+          label: Fast route
+          distance_km: 18
+          eta_minutes: 22
+          traffic_level: moderate
+          tolls: false
+        - route_id: route_safe
+          label: Safer route
+          distance_km: 21
+          eta_minutes: 28
+          traffic_level: light
+          tolls: true
+    navigation:
+      active_destination: null
+      active_route_id: null
+      guidance_started: false
+      expected_arrival_time: null
+      selected_route_summary: null
+execution_rules:
+- 需要明确目标是“快到家”而非立即执行。
+- 应基于 ETA 阈值触发，而不是固定时间触发。
+- 需要同时控制多个设备。
+- 自动化应在后台低打扰完成。
+evaluation_rubric: []
