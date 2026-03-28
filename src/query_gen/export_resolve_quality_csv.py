@@ -55,11 +55,69 @@ SETUP_HINTS = (
     "the following functions are defined",
     "the toolkit",
     "contains the following functions",
+    "available functions",
     "available actions",
     "you have access to",
     "in the execute_ipython_cell",
     "act like a person",
 )
+TOOL_FIELD_NAMES = ("tools", "available_tools", "functions", "apis", "toolkit")
+ACTION_FIELD_NAMES = ("action_space", "available_actions")
+TOOL_HEADER_PATTERNS = (
+    re.compile(r"available tools?", re.IGNORECASE),
+    re.compile(r"available functions?", re.IGNORECASE),
+    re.compile(r"the following functions are defined", re.IGNORECASE),
+    re.compile(r"contains the following functions", re.IGNORECASE),
+    re.compile(r"you have access to", re.IGNORECASE),
+    re.compile(r"\btoolkit\b", re.IGNORECASE),
+)
+ACTION_HEADER_PATTERNS = (
+    re.compile(r"available actions?:", re.IGNORECASE),
+)
+FUNCTION_SIGNATURE_RE = re.compile(
+    r"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(([^()\n]{0,200})\)\s*->\s*[^:\n]+"
+)
+XML_FUNCTION_RE = re.compile(r"<function=([A-Za-z_][A-Za-z0-9_]*)>", re.IGNORECASE)
+EXECUTE_TAG_RE = re.compile(r"<(execute_[A-Za-z_][A-Za-z0-9_]*)>", re.IGNORECASE)
+API_CALL_RE = re.compile(r"\b([A-Z][A-Za-z0-9_]*[A-Z_][A-Za-z0-9_]*)\s*\(")
+TRAJECTORY_ACTION_RE = re.compile(
+    r"\b(click|type|select|hover|goto|scroll|stop|fill|press|drag)\b(?:\s*\[|\s*\()",
+    re.IGNORECASE,
+)
+ACTION_NAME_RE = re.compile(r"\b([a-z][a-z0-9_]*)\b")
+AVAILABLE_TOOLS_TAG_RE = re.compile(
+    r"<available_tools>\s*(.*?)\s*</available_tools>",
+    re.IGNORECASE | re.DOTALL,
+)
+TOOL_CALL_TAG_RE = re.compile(
+    r"<tool_call>\s*(.*?)\s*</tool_call>",
+    re.IGNORECASE | re.DOTALL,
+)
+GENERIC_FUNCTION_NAMES = {
+    "api",
+    "args",
+    "dict",
+    "end",
+    "example",
+    "false",
+    "float",
+    "function",
+    "int",
+    "json",
+    "list",
+    "none",
+    "null",
+    "object",
+    "optional",
+    "required",
+    "response",
+    "return",
+    "str",
+    "string",
+    "tool",
+    "true",
+    "value",
+}
 
 
 def parse_args() -> argparse.Namespace:
@@ -131,6 +189,18 @@ def has_nonempty_value(value: Any) -> bool:
     return value not in (None, "", [], {})
 
 
+def unique_preserve_order(values: Iterable[str]) -> list[str]:
+    seen: set[str] = set()
+    ordered: list[str] = []
+    for value in values:
+        normalized = value.strip()
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        ordered.append(normalized)
+    return ordered
+
+
 def stringify(value: Any) -> str:
     if value is None:
         return ""
@@ -175,6 +245,7 @@ def is_available_tools_message(role: str, text: str) -> bool:
     normalized = text.lower()
     return (
         "<|im_system|>tool_declare" in normalized
+        or "<available_tools>" in normalized
         or "available tools" in normalized
         or "the following functions are defined" in normalized
         or "toolkit" in normalized
@@ -184,6 +255,288 @@ def is_available_tools_message(role: str, text: str) -> bool:
 def normalize_role(item: dict[str, Any], default_role: str = "") -> str:
     role = item.get("role") or item.get("from") or item.get("speaker") or default_role
     return str(role).strip().lower()
+
+
+def normalize_tool_name(name: str) -> str:
+    normalized = re.sub(r"\s+", " ", name.strip().strip(":,.;"))
+    return normalized
+
+
+def filter_candidate_names(names: Iterable[str]) -> list[str]:
+    filtered: list[str] = []
+    for name in names:
+        normalized = normalize_tool_name(name)
+        lowered = normalized.lower()
+        if not normalized or lowered in GENERIC_FUNCTION_NAMES:
+            continue
+        if len(normalized) == 1:
+            continue
+        filtered.append(normalized)
+    return unique_preserve_order(filtered)
+
+
+def compact_evidence_text(text: str, limit: int = 2000) -> str:
+    compact = " ".join(text.split())
+    return compact[:limit]
+
+
+def infer_execution_protocol_tools(text: str) -> list[str]:
+    normalized = " ".join(text.lower().split())
+    inferred: list[str] = []
+
+    if "computer shell" in normalized or "bash code block" in normalized:
+        inferred.append("execute_bash")
+    if "python code block" in normalized or "python interpreter" in normalized:
+        inferred.append("execute_python")
+    if "sql" in normalized and ("database" in normalized or "query" in normalized):
+        inferred.append("execute_sql")
+    if "execute_ipython_cell" in normalized:
+        inferred.append("execute_ipython_cell")
+
+    return filter_candidate_names(inferred)
+
+
+def build_available_tools_payload(
+    kind: str,
+    source: str,
+    tool_names: Iterable[str] | None = None,
+    raw_text: str | None = None,
+    data: Any = None,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "kind": kind,
+        "source": source,
+    }
+    names = filter_candidate_names(tool_names or [])
+    if names:
+        payload["tool_names"] = names
+    if raw_text:
+        payload["evidence"] = compact_evidence_text(raw_text)
+    if data is not None:
+        payload["data"] = data
+    return payload
+
+
+def extract_function_names_from_tool_specs(specs: Any) -> list[str]:
+    names: list[str] = []
+
+    if isinstance(specs, dict):
+        function_obj = specs.get("function")
+        if isinstance(function_obj, dict):
+            function_name = stringify(function_obj.get("name")).strip()
+            if function_name:
+                names.append(function_name)
+        for key in ("name", "tool_name"):
+            value = stringify(specs.get(key)).strip()
+            if value:
+                names.append(value)
+    elif isinstance(specs, list):
+        for item in specs:
+            names.extend(extract_function_names_from_tool_specs(item))
+
+    return filter_candidate_names(names)
+
+
+def extract_tagged_json_block(text: str, pattern: re.Pattern[str]) -> Any:
+    if not text:
+        return None
+    match = pattern.search(text)
+    if not match:
+        return None
+    raw_block = match.group(1).strip()
+    if not raw_block:
+        return None
+    try:
+        return json.loads(raw_block)
+    except json.JSONDecodeError:
+        return None
+
+
+def extract_available_tools_from_tagged_text(
+    text: str, source: str
+) -> dict[str, Any] | None:
+    specs = extract_tagged_json_block(text, AVAILABLE_TOOLS_TAG_RE)
+    if not has_nonempty_value(specs):
+        return None
+
+    return build_available_tools_payload(
+        kind="explicit_tool_definition",
+        source=source,
+        tool_names=extract_function_names_from_tool_specs(specs),
+        raw_text=text,
+        data=specs,
+    )
+
+
+def extract_tool_calls_from_tagged_text(text: str, source: str) -> dict[str, Any] | None:
+    calls = extract_tagged_json_block(text, TOOL_CALL_TAG_RE)
+    if not has_nonempty_value(calls):
+        return None
+
+    return build_available_tools_payload(
+        kind="observed_tool_usage",
+        source=source,
+        tool_names=extract_function_names_from_tool_specs(calls),
+        raw_text=text,
+        data=calls,
+    )
+
+
+def extract_action_names_from_text(text: str) -> list[str]:
+    if not text:
+        return []
+
+    action_names: list[str] = []
+    for match in re.finditer(r"->\s*([A-Z_]{2,})\b", text):
+        action_names.append(match.group(1).lower())
+    for match in TRAJECTORY_ACTION_RE.finditer(text):
+        action_names.append(match.group(1).lower())
+    for match in re.finditer(r"\bAction:\s*([a-z][a-z0-9_ ]{1,80})", text, re.IGNORECASE):
+        action_text = match.group(1).strip()
+        first_token = action_text.split()[0]
+        action_names.append(first_token.lower())
+    return filter_candidate_names(action_names)
+
+
+def extract_function_names_from_text(text: str) -> list[str]:
+    if not text:
+        return []
+
+    names: list[str] = []
+    names.extend(match.group(1) for match in XML_FUNCTION_RE.finditer(text))
+    names.extend(match.group(1) for match in EXECUTE_TAG_RE.finditer(text))
+    names.extend(match.group(1) for match in API_CALL_RE.finditer(text))
+    names.extend(match.group(1) for match in FUNCTION_SIGNATURE_RE.finditer(text))
+    return filter_candidate_names(names)
+
+
+def extract_action_space_from_text(text: str, source: str) -> dict[str, Any] | None:
+    if not text:
+        return None
+    if not any(pattern.search(text) for pattern in ACTION_HEADER_PATTERNS):
+        return None
+
+    match = re.search(
+        r"available actions?:\s*(.{0,1500})",
+        text,
+        re.IGNORECASE | re.DOTALL,
+    )
+    segment = match.group(1) if match else text[:1500]
+    segment = re.split(r"\b(?:assistant|observation|thought|action):", segment, maxsplit=1, flags=re.IGNORECASE)[0]
+
+    candidates: list[str] = []
+    for piece in re.split(r"[\n,;]+", segment):
+        cleaned = piece.strip()
+        if not cleaned:
+            continue
+        token_match = ACTION_NAME_RE.search(cleaned.lower())
+        if token_match:
+            candidates.append(token_match.group(1))
+
+    return build_available_tools_payload(
+        kind="action_space",
+        source=source,
+        tool_names=candidates or extract_action_names_from_text(segment),
+        raw_text=segment,
+    )
+
+
+def extract_explicit_tool_definition_from_text(
+    text: str, source: str
+) -> dict[str, Any] | None:
+    if not text:
+        return None
+    header_match = next((pattern.search(text) for pattern in TOOL_HEADER_PATTERNS if pattern.search(text)), None)
+    if not header_match:
+        return None
+
+    segment = text[header_match.start() : header_match.start() + 2500]
+
+    tool_names = extract_function_names_from_text(segment)
+    if not tool_names:
+        tool_names = infer_execution_protocol_tools(segment)
+
+    return build_available_tools_payload(
+        kind="explicit_tool_definition",
+        source=source,
+        tool_names=tool_names,
+        raw_text=segment,
+    )
+
+
+def action_name_from_raw_value(value: Any) -> str | None:
+    text = stringify(value).strip()
+    if not text:
+        return None
+
+    match = re.search(r"->\s*([A-Z_]{2,})\b", text)
+    if match:
+        return match.group(1).lower()
+
+    match = TRAJECTORY_ACTION_RE.search(text)
+    if match:
+        return match.group(1).lower()
+
+    first_token = text.split()[0].strip("[]():,.;").lower()
+    if re.fullmatch(r"[a-z][a-z0-9_]{1,40}", first_token):
+        return first_token
+    return None
+
+
+def extract_observed_tool_usage_from_record(record: dict[str, Any]) -> dict[str, Any] | None:
+    tool_names: list[str] = []
+
+    content = json_maybe_load(record.get("content"))
+    if isinstance(content, list):
+        for item in content:
+            if not isinstance(item, dict):
+                continue
+            class_name = str(item.get("class_", "")).strip().lower()
+            function_name = stringify(item.get("function")).strip()
+            if class_name == "api_action" and function_name:
+                tool_names.append(function_name)
+            if class_name == "code_action":
+                language = stringify(item.get("language")).strip().lower()
+                if language:
+                    tool_names.append(f"execute_{language}")
+
+    step_data = json_maybe_load(record.get("step_data"))
+    if isinstance(step_data, dict):
+        for key in ("action", "parsed_action"):
+            name = action_name_from_raw_value(step_data.get(key))
+            if name:
+                tool_names.append(name)
+
+    for key in ("action_reprs", "available_actions"):
+        values = json_maybe_load(record.get(key))
+        if isinstance(values, list):
+            for item in values[:100]:
+                name = action_name_from_raw_value(item)
+                if name:
+                    tool_names.append(name)
+
+    actions = json_maybe_load(record.get("actions"))
+    if isinstance(actions, list):
+        for item in actions[:100]:
+            if not isinstance(item, dict):
+                name = action_name_from_raw_value(item)
+                if name:
+                    tool_names.append(name)
+                continue
+            for key in ("action", "action_type", "operation", "name"):
+                name = action_name_from_raw_value(item.get(key))
+                if name:
+                    tool_names.append(name)
+
+    tool_names = filter_candidate_names(tool_names)
+    if not tool_names:
+        return None
+
+    return build_available_tools_payload(
+        kind="observed_tool_usage",
+        source="record_structure",
+        tool_names=tool_names,
+    )
 
 
 def extract_turns_from_messages(messages_raw: Any) -> list[tuple[str, str]]:
@@ -343,20 +696,89 @@ def extract_user_turn_count(record: dict[str, Any], turns: list[tuple[str, str]]
 
 
 def extract_available_tools(record: dict[str, Any], turns: list[tuple[str, str]] | None = None) -> Any:
-    for key in ("tools", "available_tools"):
+    for key in TOOL_FIELD_NAMES:
         value = json_maybe_load(record.get(key))
         if has_nonempty_value(value):
-            return value
+            return build_available_tools_payload(
+                kind="explicit_tool_definition",
+                source=f"record.{key}",
+                data=value,
+            )
+
+    for key in ACTION_FIELD_NAMES:
+        value = json_maybe_load(record.get(key))
+        if has_nonempty_value(value):
+            return build_available_tools_payload(
+                kind="action_space",
+                source=f"record.{key}",
+                data=value,
+            )
 
     target_tools = json_maybe_load(record.get("target_tools"))
     if has_nonempty_value(target_tools):
-        return {"target_tools": target_tools}
-
-    system_value = stringify(record.get("system")).strip()
-    if system_value and looks_like_setup(system_value):
-        return system_value
+        return build_available_tools_payload(
+            kind="explicit_tool_definition",
+            source="record.target_tools",
+            data={"target_tools": target_tools},
+        )
 
     resolved_turns = turns if turns is not None else extract_turns(record)
+    for index, (role, text) in enumerate(resolved_turns):
+        source = f"turns[{index}].{role or 'unknown'}"
+        tagged_tools = extract_available_tools_from_tagged_text(text, source)
+        if tagged_tools:
+            return tagged_tools
+
+        action_space = extract_action_space_from_text(text, source)
+        if action_space:
+            return action_space
+
+        explicit_tools = extract_explicit_tool_definition_from_text(text, source)
+        if explicit_tools:
+            return explicit_tools
+
+        tagged_calls = extract_tool_calls_from_tagged_text(text, source)
+        if tagged_calls:
+            return tagged_calls
+
+        if role == "system":
+            inferred_tools = infer_execution_protocol_tools(text)
+            if inferred_tools:
+                return build_available_tools_payload(
+                    kind="explicit_tool_definition",
+                    source=source,
+                    tool_names=inferred_tools,
+                    raw_text=text,
+                )
+
+    system_value = stringify(record.get("system")).strip()
+    tagged_tools = extract_available_tools_from_tagged_text(
+        system_value,
+        "record.system",
+    )
+    if tagged_tools:
+        return tagged_tools
+
+    explicit_from_system = extract_explicit_tool_definition_from_text(
+        system_value,
+        "record.system",
+    )
+    if explicit_from_system:
+        return explicit_from_system
+
+    inferred_tools = infer_execution_protocol_tools(system_value)
+    if inferred_tools:
+        return build_available_tools_payload(
+            kind="explicit_tool_definition",
+            source="record.system",
+            tool_names=inferred_tools,
+            raw_text=system_value,
+        )
+
+    observed_from_record = extract_observed_tool_usage_from_record(record)
+    if observed_from_record:
+        return observed_from_record
+
     tool_messages: list[dict[str, str]] = []
     for role, text in resolved_turns:
         if is_available_tools_message(role, text):
@@ -370,7 +792,48 @@ def extract_available_tools(record: dict[str, Any], turns: list[tuple[str, str]]
             tool_messages.append({"role": role, "content": text})
 
     if tool_messages:
-        return tool_messages
+        joined_text = "\n\n".join(item["content"] for item in tool_messages)
+        explicit_tools = extract_explicit_tool_definition_from_text(
+            joined_text,
+            "turn_messages",
+        )
+        if explicit_tools:
+            return explicit_tools
+        action_space = extract_action_space_from_text(joined_text, "turn_messages")
+        if action_space:
+            return action_space
+
+    text_value = stringify(record.get("text")).strip()
+    tagged_tools = extract_available_tools_from_tagged_text(text_value, "record.text")
+    if tagged_tools:
+        return tagged_tools
+
+    tagged_calls = extract_tool_calls_from_tagged_text(text_value, "record.text")
+    if tagged_calls:
+        return tagged_calls
+
+    action_space = extract_action_space_from_text(text_value, "record.text")
+    if action_space:
+        return action_space
+
+    explicit_tools = extract_explicit_tool_definition_from_text(
+        text_value,
+        "record.text",
+    )
+    if explicit_tools:
+        return explicit_tools
+
+    function_names = extract_function_names_from_text(text_value)
+    action_names = extract_action_names_from_text(text_value)
+    recovered_names = filter_candidate_names(function_names + action_names)
+    if recovered_names:
+        return build_available_tools_payload(
+            kind="observed_tool_usage",
+            source="record.text",
+            tool_names=recovered_names,
+            raw_text=text_value,
+        )
+
     return None
 
 

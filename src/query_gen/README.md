@@ -194,3 +194,8 @@ python filter_resolve_quality_topk.py
 最终结果在：
 
 - `/home/unlimitediw/workspace/ImplicitConstraints/src/query_gen/toucan_resolve_quality_top500.csv`
+
+
+python src/query_gen/export_resolve_quality_csv.py
+
+python src/query_gen/filter_resolve_quality_topk.py   -i src/query_gen/seed_dataset_query_stats.csv   --top-k 100   --max-query-chars 80   --sort-field turn_count   -o src/query_gen/seed_dataset_turn_a.jsonl

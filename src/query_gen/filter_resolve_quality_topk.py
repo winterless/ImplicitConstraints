@@ -207,6 +207,20 @@ def boundary_safe_pattern(pattern: str) -> str:
     return rf"(?<![A-Za-z0-9])(?:{pattern})(?![A-Za-z0-9])"
 
 
+def dedupe_query_key(query: str) -> str:
+    return " ".join(query.split()).casefold()
+
+
+def row_sort_key(row: dict[str, Any]) -> tuple[int, int, int, int, str]:
+    return (
+        int(row["sort_value"]),
+        int(row["turn_count"]),
+        int(row["conversation_length"]),
+        int(row["query_length"]),
+        str(row["source_pointer"]),
+    )
+
+
 def select_top_rows(
     csv_path: Path,
     max_query_chars: int,
@@ -215,11 +229,12 @@ def select_top_rows(
     sort_field: str,
     whitelist_patterns: list[re.Pattern[str]],
 ) -> list[dict[str, Any]]:
-    heap: list[tuple[int, str, dict[str, Any]]] = []
     kept_rows = 0
     excluded_invalid_rows = 0
     excluded_user_turn_rows = 0
     excluded_nonmatching_rows = 0
+    excluded_duplicate_queries = 0
+    best_row_by_query: dict[str, dict[str, Any]] = {}
 
     with csv_path.open("r", encoding="utf-8", newline="") as csv_file:
         reader = csv.DictReader(csv_file)
@@ -280,29 +295,23 @@ def select_top_rows(
                 "sort_field": sort_field,
                 "sort_value": sort_value,
             }
-            item = (sort_value, source_pointer, enriched)
-            if len(heap) < top_k:
-                heapq.heappush(heap, item)
-            elif item > heap[0]:
-                heapq.heapreplace(heap, item)
+            query_key = dedupe_query_key(original_query)
+            previous = best_row_by_query.get(query_key)
+            if previous is None or row_sort_key(enriched) > row_sort_key(previous):
+                if previous is not None:
+                    excluded_duplicate_queries += 1
+                best_row_by_query[query_key] = enriched
+            else:
+                excluded_duplicate_queries += 1
 
-    top_rows = [item[2] for item in heap]
-    top_rows.sort(
-        key=lambda row: (
-            int(row["sort_value"]),
-            int(row["turn_count"]),
-            int(row["conversation_length"]),
-            int(row["query_length"]),
-            str(row["source_pointer"]),
-        ),
-        reverse=True,
-    )
+    top_rows = sorted(best_row_by_query.values(), key=row_sort_key, reverse=True)[:top_k]
     print(
         f"Kept {kept_rows} rows with query_length < {max_query_chars} "
         f"and user_turn_count <= {max_user_turns}, "
         f"excluded {excluded_invalid_rows} invalid/no-tools rows, "
         f"excluded {excluded_user_turn_rows} user-turn-limit rows, "
         f"excluded {excluded_nonmatching_rows} whitelist-miss rows, "
+        f"excluded {excluded_duplicate_queries} duplicate-query rows, "
         f"selected top {len(top_rows)} by {sort_field}"
     )
     return top_rows
