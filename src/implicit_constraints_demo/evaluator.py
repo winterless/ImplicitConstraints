@@ -5,7 +5,7 @@ from abc import ABC, abstractmethod
 from datetime import datetime, timedelta
 from typing import Any
 
-from .llm_client import ChatCompletionClient, extract_first_json_object
+from .llm_client import ChatCompletionClient
 from .schemas import Scenario
 
 
@@ -127,14 +127,16 @@ class LLMScenarioEvaluator(BaseScenarioEvaluator):
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ]
-        raw_response = self.client.chat_completion(request_messages)
-        parsed = extract_first_json_object(raw_response)
+        completion = self.client.chat_completion_json(request_messages, repair_retries=1)
+        raw_response = completion.content
+        parsed = completion.parsed
         normalized = _normalize_llm_evaluation(parsed)
         normalized["model_log"] = {
             "evaluator_mode": self.mode,
             "request_messages": request_messages,
             "raw_response": raw_response,
             "parsed_response": parsed,
+            "repair_attempts": completion.repair_attempts,
         }
         return normalized
 
@@ -181,17 +183,17 @@ def _subtract_minutes(local_time: str, minutes: int) -> str:
 
 def _build_evaluator_system_prompt() -> str:
     return (
-        "You are the evaluator for an implicit-intelligence benchmark.\n"
-        "Judge whether the agent successfully solved the user's request.\n"
-        "Use the scenario metadata, hidden constraints, execution rules, tool trace, and final world state.\n"
-        "Be strict, mechanical, and evidence-based.\n"
-        "If an explicit evaluation rubric is present, use it directly.\n"
-        "If the rubric is empty, derive 3 to 6 concrete criteria from the hidden constraints, implicit reason, "
-        "suggested plan, and execution rules.\n"
-        "A criterion should only pass when the trace or final state clearly supports it.\n"
-        "Return exactly one JSON object with keys criteria, overall_passed, overall_reasoning.\n"
-        "criteria must be an array of objects with keys criterion, passed, reasoning.\n"
-        "Do not use markdown fences."
+        "你是一个隐式约束基准的评测器。\n"
+        "你的任务是判断智能体是否成功解决了用户请求。\n"
+        "你必须使用场景元数据、隐藏约束、执行规则、工具调用轨迹和最终世界状态来评估。\n"
+        "评测风格要严格、机械、基于证据。\n"
+        "如果存在显式 evaluation rubric，就直接按 rubric 评测。\n"
+        "如果 rubric 为空，就根据 hidden constraints、implicit reason、suggested plan 和 execution rules 推导 3 到 6 条具体评测标准。\n"
+        "只有当轨迹或最终状态能清楚支持该标准时，这条标准才算通过。\n"
+        "criterion、reasoning 和 overall_reasoning 字段都必须使用中文。\n"
+        "必须只返回一个包含 criteria、overall_passed、overall_reasoning 的 JSON 对象。\n"
+        "其中 criteria 必须是一个数组，数组元素是包含 criterion、passed、reasoning 的对象。\n"
+        "不要使用 markdown 代码块围栏。"
     )
 
 
@@ -213,7 +215,7 @@ def _build_evaluator_user_prompt(
         "final_world_state": final_state,
     }
     return (
-        "Evaluate this scenario run.\n\n"
+        "请评估这次场景运行结果，并用中文填写所有解释字段。\n\n"
         f"{json.dumps(payload, ensure_ascii=False, indent=2)}"
     )
 
@@ -225,9 +227,9 @@ def _normalize_llm_evaluation(parsed: dict[str, Any]) -> dict[str, Any]:
         for item in raw_criteria:
             if not isinstance(item, dict):
                 continue
-            criterion = str(item.get("criterion", "")).strip() or "Unnamed criterion"
+            criterion = str(item.get("criterion", "")).strip() or "未命名标准"
             passed = bool(item.get("passed"))
-            reasoning = str(item.get("reasoning", "")).strip() or "No reasoning provided."
+            reasoning = str(item.get("reasoning", "")).strip() or "未提供理由。"
             criteria.append(
                 {
                     "criterion": criterion,

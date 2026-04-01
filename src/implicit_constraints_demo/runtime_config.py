@@ -7,6 +7,7 @@ from .llm_client import (
     DEFAULT_ALIYUN_API_KEY_FILE,
     DEFAULT_ALIYUN_BASE_URL,
     DEFAULT_ALIYUN_MODEL,
+    DEFAULT_MAX_TOKENS,
 )
 from .schemas import load_yaml
 
@@ -29,6 +30,7 @@ class RoleRuntimeConfig:
     timeout_s: int = 120
     retries: int = 2
     temperature: float = 0.0
+    max_tokens: int = DEFAULT_MAX_TOKENS
 
 
 @dataclass(slots=True)
@@ -74,6 +76,7 @@ def override_runtime_config(
     timeout_s: int | None = None,
     retries: int | None = None,
     temperature: float | None = None,
+    max_tokens: int | None = None,
 ) -> RuntimeConfig:
     return RuntimeConfig(
         agent=_override_role_config(
@@ -88,6 +91,7 @@ def override_runtime_config(
             timeout_s=timeout_s,
             retries=retries,
             temperature=temperature,
+            max_tokens=max_tokens,
         ),
         world=_override_role_config(
             config.world,
@@ -101,6 +105,7 @@ def override_runtime_config(
             timeout_s=timeout_s,
             retries=retries,
             temperature=temperature,
+            max_tokens=max_tokens,
         ),
         evaluator=_override_role_config(
             config.evaluator,
@@ -114,6 +119,7 @@ def override_runtime_config(
             timeout_s=timeout_s,
             retries=retries,
             temperature=temperature,
+            max_tokens=max_tokens,
         ),
     )
 
@@ -139,6 +145,7 @@ def _load_role_config(
         timeout_s=int(section.get("timeout_s", defaults.timeout_s)),
         retries=int(section.get("retries", defaults.retries)),
         temperature=float(section.get("temperature", defaults.temperature)),
+        max_tokens=int(section.get("max_tokens", defaults.max_tokens)),
     )
     if config.mode not in allowed_modes:
         raise ValueError(
@@ -161,6 +168,7 @@ def _override_role_config(
     timeout_s: int | None,
     retries: int | None,
     temperature: float | None,
+    max_tokens: int | None,
 ) -> RoleRuntimeConfig:
     updated = replace(
         config,
@@ -172,6 +180,7 @@ def _override_role_config(
         timeout_s=config.timeout_s if timeout_s is None else timeout_s,
         retries=config.retries if retries is None else retries,
         temperature=config.temperature if temperature is None else temperature,
+        max_tokens=config.max_tokens if max_tokens is None else max_tokens,
     )
     if mode is not None:
         if mode not in allowed_modes:

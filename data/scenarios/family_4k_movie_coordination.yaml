@@ -1,0 +1,99 @@
+id: family_4k_movie_coordination
+category: implicit_reasoning
+user_prompt: 帮我协调一次家庭4K观影，避开外孙离京前、上次观影后、宽带缓冲不佳时段及我周三固定安排。
+original_question: 我想在外孙还在北京期间再安排一次在家看4K电影。请告诉我他的在京起止日期、我们上次在家看的影片、家里千兆宽带在4K流媒体下的缓冲表现，以及我每周三的固定观影时间地点，便于我避开冲突。
+tool_category: family_media_scheduling
+implicit_reason: 用户不是要单独查四条信息，而是要安排一个可执行的家庭观影时间。系统需要把家人停留窗口、既有观影历史、网络条件和固定日程拼接起来，最终确定一个不冲突且适合 4K 观看的时段。
+hidden_constraints:
+  - 新的观影安排必须发生在外孙离京之前。
+  - 需要避开每周三已有的固定观影安排。
+  - 网络状态必须足以支撑 4K 流媒体体验。
+  - 最终结果应是一个可执行的观影时间安排，而不是零散事实列表。
+suggested_plan:
+  - 查询外孙的在京时间窗口。
+  - 查询上次在家观影记录和当前网络表现。
+  - 查询可用空档并避开固定周三安排。
+  - 创建新的家庭观影提醒。
+max_steps: 6
+allowed_tools:
+  - device:family.get_visit_window
+  - device:media.get_watch_history
+  - device:media.search_recommendations
+  - device:media.open_on_tv
+  - device:network.check_stream_quality
+  - device:schedule.get_next_event
+  - device:schedule.list_free_slots
+  - device:chat.get_group_context
+  - device:profile.get_user_labels
+  - device:note.search
+  - device:note.open
+  - device:podcasts.list_unheard
+  - device:podcasts.play_episode
+  - device:reminder.create
+  - device:alarm.create
+  - device:timer.create
+world:
+  context:
+    date: "2026-04-18"
+    local_time: "16:30"
+    city: Beijing
+    scenario_source: query_top100_batch1
+    source_query_id: seed_dataset_turn_e_part1.jsonl#41
+  state:
+    schedule:
+      free_slots:
+        - start: "2026-04-19 19:30"
+          end: "2026-04-19 22:00"
+          location: Home
+        - start: "2026-04-20 20:00"
+          end: "2026-04-20 22:30"
+          location: Home
+        - start: "2026-04-22 20:00"
+          end: "2026-04-22 22:00"
+          location: Home
+    reminders: {}
+    tool_responses:
+      family.get_visit_window:
+        visit:
+          person: 外孙
+          city: Beijing
+          arrival_date: "2026-04-12"
+          departure_date: "2026-04-21"
+      media.get_watch_history:
+        history:
+          - title: 星际穿越
+            watched_at: "2026-04-10 20:00"
+            location: Home
+      network.check_stream_quality:
+        network_profile:
+          profile: 4k_streaming
+          average_buffer_seconds: 0.8
+          stable_for_4k: true
+      reminder.create:
+        reminder_id: movie_night_441
+        created: true
+    tool_state_updates:
+      reminder.create:
+        reminders:
+          movie_night_441:
+            title: 家庭4K观影
+            remind_at: "2026-04-20 19:30"
+            note: 外孙离京前安排的家庭观影
+execution_rules:
+  - 新安排必须落在外孙离京之前。
+  - 不能选在每周三既有固定观影安排上。
+  - 若网络不适合 4K，则不能把观影安排当作已解决。
+  - 成功路径应产出一个新的家庭观影提醒或等价安排。
+evaluation_rubric:
+  - criterion: The agent checked the family visit window.
+    check:
+      type: action_called
+      tool: device:family.get_visit_window
+  - criterion: The agent checked free slots before scheduling.
+    check:
+      type: action_called
+      tool: device:schedule.list_free_slots
+  - criterion: A movie reminder was created.
+    check:
+      type: action_called
+      tool: device:reminder.create

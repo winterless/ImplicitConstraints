@@ -1,0 +1,90 @@
+id: cancel_may26_houston_flight
+category: implicit_reasoning
+user_prompt: 取消我 5 月 26 日飞休斯敦的航班。
+original_question: Hi, I need to cancel a flight I booked to Houston on May 26th. Can you help me with that?
+tool_category: 航班取消与时间线核对
+implicit_reason: 用户给了目的地和日期，但系统仍需先在多个预订中核对唯一目标，再判断取消时限与费用。正确做法是先查证，再执行，而不是因为信息看起来足够就直接取消。
+hidden_constraints:
+  - 近期有多张航班，需要结合日期和目的地定位目标。
+  - 必须确认该单仍在允许取消的窗口内。
+  - 若目标唯一且规则允许，应完成取消。
+  - 结果里应体现费用或退款形式。
+suggested_plan:
+  - 列出近期航班并用 Houston + May 26 锁定目标。
+  - 查看目标航班的取消状态与费用。
+  - 在允许取消时执行取消。
+max_steps: 5
+allowed_tools:
+  - device:booking.list_upcoming_bookings
+  - device:booking.get_booking_status
+  - device:booking.cancel_booking
+  - device:reservations.get_details
+  - device:reservations.cancel
+  - device:travel.get_trip_brief
+  - device:schedule.get_next_event
+  - device:schedule.list_free_slots
+  - device:weather.get_forecast
+  - device:reminder.create
+  - device:alarm.create
+  - device:weather.check_weather
+  - device:events.get_venue_details
+  - device:profile.get_user_labels
+  - device:note.search
+  - device:timer.create
+world:
+  context:
+    date: "2026-05-20"
+    local_time: "15:18"
+    city: Dallas
+    scenario_source: query_top100_batch4
+    source_query_id: seed_dataset_turn_e_part5.jsonl#85
+  state:
+    bookings:
+      active:
+        - booking_id: flt_703
+          destination: Houston
+          departure_time: "2026-05-26 13:15"
+          status: confirmed
+        - booking_id: flt_704
+          destination: Houston
+          departure_time: "2026-06-02 09:00"
+          status: confirmed
+    tool_responses:
+      booking.list_upcoming_bookings:
+        bookings:
+          - booking_id: flt_703
+            booking_type: flight
+            destination: Houston
+            departure_time: "2026-05-26 13:15"
+          - booking_id: flt_704
+            booking_type: flight
+            destination: Houston
+            departure_time: "2026-06-02 09:00"
+      booking.get_booking_status:
+        booking:
+          booking_id: flt_703
+          status: confirmed
+          cancelable: true
+          refund_type: airline_credit
+          cancellation_fee: 20
+          cancellation_deadline: "2026-05-25 23:59"
+      booking.cancel_booking:
+        cancelled: true
+        booking_id: flt_703
+    tool_state_updates:
+      booking.cancel_booking:
+        bookings:
+          active:
+            - booking_id: flt_703
+              destination: Houston
+              departure_time: "2026-05-26 13:15"
+              status: cancelled
+            - booking_id: flt_704
+              destination: Houston
+              departure_time: "2026-06-02 09:00"
+              status: confirmed
+execution_rules:
+  - 必须结合日期和目的地定位正确航班。
+  - 必须先查看取消规则，再执行取消。
+  - 在规则允许时应完成取消，并反映取消成本。
+evaluation_rubric: []

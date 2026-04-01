@@ -21,6 +21,40 @@ from .schemas import load_scenario, load_yaml
 from .tool_registry import ToolRegistry
 from .world import build_world
 
+DEFAULT_SCENARIO_MANIFEST = "scenario_manifest.yaml"
+
+
+def _build_batch_aggregate_metrics(results: list[dict[str, Any]]) -> dict[str, Any]:
+    completed_results = [item for item in results if item.get("status") == "completed"]
+    completed_scores = [
+        float(item["normalized_scenario_score"])
+        for item in completed_results
+        if "normalized_scenario_score" in item
+    ]
+    passed_all_count = sum(
+        1 for item in completed_results if item.get("passed_all") is True
+    )
+    total_count = len(results)
+    completed_count = len(completed_results)
+
+    return {
+        "avg_completed_score": round(
+            sum(completed_scores) / completed_count, 6
+        )
+        if completed_count
+        else None,
+        "avg_all_score": round(sum(completed_scores) / total_count, 6)
+        if total_count
+        else None,
+        "sum_completed_score": round(sum(completed_scores), 6),
+        "passed_all_count": passed_all_count,
+        "passed_all_rate_completed": round(
+            passed_all_count / completed_count, 6
+        )
+        if completed_count
+        else None,
+    }
+
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -34,6 +68,13 @@ def build_parser() -> argparse.ArgumentParser:
         "--scenario-dir",
         default="data/scenarios",
         help="Directory to scan when --scenario is omitted.",
+    )
+    parser.add_argument(
+        "--scenario-manifest",
+        help=(
+            "Optional scenario manifest YAML. If omitted, the runner will use "
+            "<scenario-dir>/scenario_manifest.yaml when present, otherwise it will scan *.yaml directly."
+        ),
     )
     parser.add_argument(
         "--tool-dir",
@@ -150,7 +191,9 @@ def main() -> None:
             raise SystemExit(1)
         return
 
-    scenario_paths = _discover_executable_scenarios(Path(args.scenario_dir))
+    scenario_dir = Path(args.scenario_dir)
+    manifest_path = _resolve_scenario_manifest_path(scenario_dir, args.scenario_manifest)
+    scenario_paths = _discover_executable_scenarios(scenario_dir, manifest_path=manifest_path)
     if not scenario_paths:
         raise SystemExit(f"No executable scenarios found in: {args.scenario_dir}")
 
@@ -159,7 +202,8 @@ def main() -> None:
 
     summary: dict[str, Any] = {
         "mode": "batch",
-        "scenario_dir": str(Path(args.scenario_dir)),
+        "scenario_dir": str(scenario_dir),
+        "scenario_manifest": str(manifest_path) if manifest_path is not None else None,
         "output_dir": str(batch_output_dir),
         "total_scenarios": len(scenario_paths),
         "completed_scenarios": 0,
@@ -213,6 +257,7 @@ def main() -> None:
                 file=sys.stderr,
             )
 
+    summary.update(_build_batch_aggregate_metrics(summary["results"]))
     summary_path = batch_output_dir / "_summary.json"
     _write_json(summary_path, summary)
     print(json.dumps(summary, ensure_ascii=False, indent=2))
@@ -294,7 +339,22 @@ def _execute_scenario(
         }
 
 
-def _discover_executable_scenarios(directory: Path) -> list[Path]:
+def _resolve_scenario_manifest_path(directory: Path, manifest_arg: str | None) -> Path | None:
+    if manifest_arg:
+        manifest_path = Path(manifest_arg)
+        if not manifest_path.exists():
+            raise SystemExit(f"Scenario manifest not found: {manifest_path}")
+        return manifest_path
+    candidate = directory.parent / DEFAULT_SCENARIO_MANIFEST
+    if candidate.exists():
+        return candidate
+    return None
+
+
+def _discover_executable_scenarios(directory: Path, *, manifest_path: Path | None = None) -> list[Path]:
+    if manifest_path is not None:
+        return _discover_scenarios_from_manifest(directory, manifest_path)
+
     scenario_paths: list[Path] = []
     for path in sorted(directory.glob("*.yaml")):
         raw = load_yaml(path)
@@ -303,6 +363,52 @@ def _discover_executable_scenarios(directory: Path) -> list[Path]:
         else:
             print(f"[skip] non-executable scenario file: {path}", file=sys.stderr)
     return scenario_paths
+
+
+def _discover_scenarios_from_manifest(directory: Path, manifest_path: Path) -> list[Path]:
+    raw = load_yaml(manifest_path)
+    if not isinstance(raw, dict):
+        raise SystemExit(f"Scenario manifest must be a mapping: {manifest_path}")
+
+    entries = raw.get("scenarios", [])
+    if not isinstance(entries, list):
+        raise SystemExit(f"Scenario manifest must contain a 'scenarios' list: {manifest_path}")
+
+    selected: list[tuple[int, str, Path]] = []
+    seen_paths: set[Path] = set()
+    for idx, entry in enumerate(entries, start=1):
+        if not isinstance(entry, dict):
+            raise SystemExit(f"Invalid manifest entry at index {idx}: expected mapping")
+        if not bool(entry.get("enabled", True)):
+            continue
+
+        raw_path = entry.get("path")
+        if not raw_path:
+            raise SystemExit(f"Manifest entry at index {idx} is missing 'path'")
+
+        scenario_path = Path(str(raw_path))
+        if not scenario_path.is_absolute():
+            scenario_path = manifest_path.parent / scenario_path
+        scenario_path = scenario_path.resolve()
+        if scenario_path in seen_paths:
+            raise SystemExit(f"Duplicate scenario path in manifest: {scenario_path}")
+        if not scenario_path.exists():
+            raise SystemExit(f"Scenario listed in manifest does not exist: {scenario_path}")
+        if directory.resolve() not in scenario_path.parents:
+            raise SystemExit(
+                f"Scenario listed in manifest must be inside scenario directory {directory}: {scenario_path}"
+            )
+
+        scenario_raw = load_yaml(scenario_path)
+        if not _is_executable_scenario(scenario_raw):
+            raise SystemExit(f"Scenario listed in manifest is not executable: {scenario_path}")
+
+        order = int(entry.get("order", idx))
+        selected.append((order, str(raw_path), scenario_path))
+        seen_paths.add(scenario_path)
+
+    selected.sort(key=lambda item: (item[0], item[1]))
+    return [path for _, _, path in selected]
 
 
 def _is_executable_scenario(raw: Any) -> bool:
@@ -343,7 +449,12 @@ def _build_evaluator(config: RoleRuntimeConfig, api_key: str) -> BaseScenarioEva
     return build_evaluator(config.mode, client=client)
 
 
-def _build_role_client(config: RoleRuntimeConfig, api_key: str) -> ChatCompletionClient | None:
+def _build_role_client(
+    config: RoleRuntimeConfig,
+    api_key: str,
+    *,
+    role_name: str,
+) -> ChatCompletionClient | None:
     if config.mode not in {"llm"}:
         return None
     api_key_envs = tuple(
@@ -352,6 +463,7 @@ def _build_role_client(config: RoleRuntimeConfig, api_key: str) -> ChatCompletio
         if part.strip()
     )
     return ChatCompletionClient(
+        provider=config.provider,
         base_url=config.base_url,
         model=config.model,
         api_key=api_key,
@@ -361,6 +473,8 @@ def _build_role_client(config: RoleRuntimeConfig, api_key: str) -> ChatCompletio
         timeout_s=config.timeout_s,
         retries=config.retries,
         temperature=config.temperature,
+        max_tokens=config.max_tokens,
+        thinking_budget=_default_thinking_budget(config, role_name=role_name),
     )
 
 
@@ -371,12 +485,40 @@ def _require_role_client(
     api_key: str,
 ) -> ChatCompletionClient:
     try:
-        client = _build_role_client(config, api_key=api_key)
+        client = _build_role_client(config, api_key=api_key, role_name=role_name)
     except ValueError as exc:
         raise SystemExit(f"{role_name} role requires a usable LLM client: {exc}") from exc
     if client is None:
         raise SystemExit(f"{role_name} role is not configured to use an LLM client.")
     return client
+
+
+def _default_thinking_budget(
+    config: RoleRuntimeConfig,
+    *,
+    role_name: str,
+) -> int | None:
+    provider = config.provider.strip().lower()
+    model = config.model.strip().lower()
+    if provider != "gemini":
+        return None
+    if role_name != "agent":
+        if _gemini_model_requires_thinking(model):
+            return None
+        return 0
+    if _gemini_model_requires_thinking(model):
+        return 256
+    if not _gemini_model_supports_thinking(model):
+        return None
+    return 256
+
+
+def _gemini_model_supports_thinking(model_name: str) -> bool:
+    return model_name.startswith("gemini-2.5") or model_name.startswith("gemini-3")
+
+
+def _gemini_model_requires_thinking(model_name: str) -> bool:
+    return model_name.startswith("gemini-3.1")
 
 
 def _runtime_config_snapshot(config: RuntimeConfig) -> dict[str, Any]:
@@ -399,6 +541,7 @@ def _role_config_snapshot(config: RoleRuntimeConfig) -> dict[str, Any]:
         "timeout_s": config.timeout_s,
         "retries": config.retries,
         "temperature": config.temperature,
+        "max_tokens": config.max_tokens,
     }
 
 

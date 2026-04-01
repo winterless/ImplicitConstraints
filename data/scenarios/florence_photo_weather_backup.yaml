@@ -1,0 +1,113 @@
+id: florence_photo_weather_backup
+category: implicit_reasoning
+user_prompt: 明天佛罗伦萨市中心拍摄，晴就找工作室旁步行咖啡馆，雨就取消。
+original_question: 我计划明天下午在意大利佛罗伦萨的市中心进行户外人像拍摄。请先帮我查询佛罗伦萨的天气情况。如果天气晴朗，我需要几家离我租的工作室步行距离内的咖啡馆；如果有降雨，则考虑取消或改期。
+tool_category: weather_backup_booking
+implicit_reason: 用户不是单纯查天气，而是要基于天气分支决定拍摄方案。系统需要先判断明天下午是否适合户外拍摄，再在晴天分支准备室内备选地点，在降雨分支处理取消动作，避免继续沿用原计划。
+hidden_constraints:
+  - 需要先判断明天下午是否适合户外拍摄，而不是直接搜咖啡馆。
+  - 晴天分支需要给出工作室步行范围内的室内备选地点。
+  - 雨天分支需要检查预订是否可取消以及取消成本。
+  - 最终动作应与天气分支一致，不能同时推进互斥方案。
+suggested_plan:
+  - 查询佛罗伦萨明天下午的天气。
+  - 查询当前工作室预订的取消条件。
+  - 若天气适合则查找步行咖啡馆，若天气不适合则取消预订。
+max_steps: 6
+allowed_tools:
+  - device:weather.get_forecast
+  - device:maps.search_nearby_places
+  - device:booking.get_booking_status
+  - device:booking.cancel_booking
+  - device:booking.list_upcoming_bookings
+  - device:reservations.get_details
+  - device:reservations.cancel
+  - device:travel.get_trip_brief
+  - device:schedule.get_next_event
+  - device:schedule.list_free_slots
+  - device:reminder.create
+  - device:weather.check_weather
+  - device:temperature.check
+  - device:alarm.create
+  - device:photos.search_by_metadata
+  - device:photos.prepare_share_bundle
+  - device:chat.get_group_context
+  - device:messaging.open_contact_thread
+  - device:note.search
+  - device:power.get_battery_status
+  - device:events.get_venue_details
+  - device:note.open
+  - device:power.freeze_background_apps
+  - device:power.apply_saving_plan
+  - device:profile.get_user_labels
+  - device:timer.create
+world:
+  context:
+    date: "2026-04-18"
+    local_time: "19:40"
+    city: Florence
+    destination_hint: Via dei Parmigiani 12
+    scenario_source: query_top100_batch1
+    source_query_id: seed_dataset_turn_e_part3.jsonl#178
+  state:
+    bookings:
+      current:
+        booking_id: studio_441
+        status: confirmed
+        refundable: true
+    tool_responses:
+      weather.get_forecast:
+        forecast:
+          location: Florence Historic Center
+          date: "2026-04-19"
+          time_range: "14:00-18:00"
+          condition: heavy_rain
+          rain_probability: 88
+          expected_precip_mm: 9
+          wind_level: moderate
+      maps.search_nearby_places:
+        places:
+          - name: Caffe del Centro
+            walk_minutes: 4
+            category: cafe
+          - name: Studio Bistro
+            walk_minutes: 6
+            category: cafe
+      booking.get_booking_status:
+        booking:
+          booking_id: studio_441
+          venue_name: Via dei Parmigiani 12 daylight studio
+          status: confirmed
+          refundable: true
+          cancellation_deadline: "2026-04-19 10:00"
+          cancellation_fee: 0
+      booking.cancel_booking:
+        cancelled: true
+        booking_id: studio_441
+    tool_state_updates:
+      booking.cancel_booking:
+        bookings:
+          current:
+            booking_id: studio_441
+            status: cancelled
+            refundable: false
+execution_rules:
+  - 必须先检查天气，再决定继续准备备选地点还是取消预订。
+  - 若天气明显不适合户外拍摄，应优先处理取消或改期分支。
+  - 取消前必须检查预订状态和取消条件。
+  - 不能在已经决定取消的情况下继续把咖啡馆搜索当作主要执行结果。
+evaluation_rubric:
+  - criterion: The agent checked the weather forecast.
+    check:
+      type: action_called
+      tool: device:weather.get_forecast
+  - criterion: The agent inspected booking status before cancelling.
+    check:
+      type: action_before
+      first: device:booking.get_booking_status
+      second: device:booking.cancel_booking
+  - criterion: The booking was cancelled in final state.
+    check:
+      type: state_eq
+      path: bookings.current.status
+      value: cancelled

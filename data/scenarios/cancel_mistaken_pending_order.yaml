@@ -1,0 +1,68 @@
+id: cancel_mistaken_pending_order
+category: implicit_reasoning
+user_prompt: 取消我误下的待处理订单。
+original_question: Hello! I'd like to cancel a pending order that I placed by mistake. Can you help me with that?
+tool_category: 电商订单取消
+implicit_reason: “pending” 和 “by mistake” 共同说明这是一道典型的安全取消题。模型应先确认订单确实仍在待处理状态，再完成取消，避免把“误下单”的高优先级诉求变成只给建议的保守回答。
+hidden_constraints:
+  - 必须先验证订单仍是 pending，而不是已进入打包。
+  - 只有在仍可取消时，才能执行取消。
+  - 由于是误下单，若安全路径存在，应直接完成取消。
+  - 回复中应体现是否已成功撤销。
+suggested_plan:
+  - 查询最近订单状态。
+  - 核对 pending 与 cancelable 标记。
+  - 若可取消则执行取消。
+max_steps: 4
+allowed_tools:
+  - device:commerce.get_recent_order_status
+  - device:commerce.cancel_order
+  - device:commerce.list_recent_orders
+  - device:commerce.get_order_policy
+  - device:profile.get_user_labels
+  - device:schedule.get_next_event
+  - device:schedule.list_free_slots
+  - device:reminder.create
+  - device:timer.create
+  - device:note.search
+  - device:notifications.set_delivery_policy
+  - device:alarm.create
+  - device:note.open
+world:
+  context:
+    date: "2026-04-22"
+    local_time: "11:32"
+    city: Phoenix
+    scenario_source: query_top100_batch4
+    source_query_id: seed_dataset_turn_e_part4.jsonl#165
+  state:
+    orders:
+      current:
+        order_id: ord_912
+        status: pending_review
+        cancelable: true
+    tool_responses:
+      commerce.get_recent_order_status:
+        order:
+          order_id: ord_912
+          item_name: wireless mouse
+          placed_at: "2026-04-22 11:10"
+          status: pending_review
+          cancelable: true
+          payment_captured: true
+          refund_delay_hours: 4
+      commerce.cancel_order:
+        cancelled: true
+        order_id: ord_912
+    tool_state_updates:
+      commerce.cancel_order:
+        orders:
+          current:
+            order_id: ord_912
+            status: cancelled
+            cancelable: false
+execution_rules:
+  - 必须先读取订单状态。
+  - 若订单仍为 pending 且可取消，应完成取消。
+  - 最终状态应显示订单已取消。
+evaluation_rubric: []

@@ -1,0 +1,77 @@
+id: chengdu_guiyang_latest_business_seat
+category: implicit_reasoning
+user_prompt: 查周六成都东到贵阳北最晚还有商务座余票的高铁和票价。
+original_question: 我计划下个星期六从成都东站前往贵阳北站，但希望乘坐当天最晚出发且还有商务座余票的高铁，请帮我查询符合要求的车次信息及对应票价？
+tool_category: rail_latest_business_seat_search
+implicit_reason: 用户表面上是在查车次信息，真实目标是筛出当天最晚且仍有商务座余票的唯一可行车次。系统必须把日期、车次时序、商务座库存和票价绑定起来一起判断，而不是返回一个普通车次列表。
+hidden_constraints:
+  - 必须基于周六对应的候选车次进行筛选，而不是返回泛化时刻表。
+  - 最晚出发的判断必须建立在商务座仍有余票的前提上。
+  - 票价必须和最终筛中的具体车次及席别绑定。
+  - 最终输出应给出唯一最优结果，而不是一组未排序候选。
+suggested_plan:
+  - 查询成都东到贵阳北周六当天的高铁候选。
+  - 过滤掉商务座售罄的车次。
+  - 在剩余候选中选择最晚出发的一趟，并返回对应票价。
+max_steps: 3
+allowed_tools:
+  - device:rail.search_train_options
+  - device:schedule.get_next_event
+  - device:schedule.list_free_slots
+  - device:weather.get_forecast
+  - device:travel.get_trip_brief
+  - device:alarm.create
+  - device:reminder.create
+  - device:time.convert_timezone
+  - device:weather.check_weather
+  - device:profile.get_user_labels
+  - device:note.search
+  - device:timer.create
+world:
+  context:
+    date: "2026-04-13"
+    local_time: "10:05"
+    city: Chengdu
+    scenario_source: query_top100_batch2
+    source_query_id: seed_dataset_turn_e_part1.jsonl#115
+  state:
+    tool_responses:
+      rail.search_train_options:
+        trains:
+          - train_no: G2371
+            origin_station: 成都东
+            destination_station: 贵阳北
+            travel_date: "2026-04-18"
+            departure_time: "19:12"
+            arrival_time: "21:48"
+            business_seat_available: false
+            business_seat_price_cny: 735
+          - train_no: G2981
+            origin_station: 成都东
+            destination_station: 贵阳北
+            travel_date: "2026-04-18"
+            departure_time: "18:05"
+            arrival_time: "20:41"
+            business_seat_available: true
+            business_seat_price_cny: 728
+          - train_no: G2893
+            origin_station: 成都东
+            destination_station: 贵阳北
+            travel_date: "2026-04-18"
+            departure_time: "17:32"
+            arrival_time: "20:06"
+            business_seat_available: true
+            business_seat_price_cny: 721
+          - train_no: G2877
+            origin_station: 成都东
+            destination_station: 贵阳北
+            travel_date: "2026-04-18"
+            departure_time: "16:10"
+            arrival_time: "18:47"
+            business_seat_available: false
+            business_seat_price_cny: 714
+execution_rules:
+  - 必须在有商务座余票的候选中选出最晚出发的一趟。
+  - 不能把绝对最晚但已售罄商务座的车次当成正确答案。
+  - 最终输出必须包含所选车次及其商务座票价。
+evaluation_rubric: []

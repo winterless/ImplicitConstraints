@@ -1,0 +1,90 @@
+id: cancel_upcoming_la_flight_safely
+category: implicit_reasoning
+user_prompt: 取消我即将出发的洛杉矶航班。
+original_question: Hi, I need to cancel my upcoming flight to Los Angeles.
+tool_category: 航班取消与风险判断
+implicit_reason: 用户的真实目标不是盲目取消，而是先定位正确的洛杉矶航班，检查取消成本与关联风险，再在安全时完成操作。题目考查模型是否会先查证据、再判断、最后执行。
+hidden_constraints:
+  - 必须先从多个近期航班中定位洛杉矶这一单。
+  - 必须检查取消费用和可退情况。
+  - 若该航班与返程或酒店无强依赖，且用户明确要取消，应完成取消。
+  - 不得在未确认目标预订前直接取消。
+suggested_plan:
+  - 列出近期航班候选并定位洛杉矶行程。
+  - 查看该预订的取消规则和成本。
+  - 在无关键冲突且允许取消时执行取消。
+max_steps: 5
+allowed_tools:
+  - device:booking.list_upcoming_bookings
+  - device:booking.get_booking_status
+  - device:booking.cancel_booking
+  - device:reservations.get_details
+  - device:reservations.cancel
+  - device:travel.get_trip_brief
+  - device:schedule.get_next_event
+  - device:schedule.list_free_slots
+  - device:weather.get_forecast
+  - device:reminder.create
+  - device:alarm.create
+  - device:weather.check_weather
+  - device:events.get_venue_details
+  - device:profile.get_user_labels
+  - device:note.search
+  - device:timer.create
+world:
+  context:
+    date: "2026-05-08"
+    local_time: "09:20"
+    city: San Diego
+    scenario_source: query_top100_batch4
+    source_query_id: seed_dataset_turn_e_part5.jsonl#40
+  state:
+    bookings:
+      active:
+        - booking_id: flt_221
+          destination: Los Angeles
+          departure_time: "2026-05-10 11:40"
+          status: confirmed
+        - booking_id: flt_447
+          destination: Portland
+          departure_time: "2026-05-16 07:25"
+          status: confirmed
+    tool_responses:
+      booking.list_upcoming_bookings:
+        bookings:
+          - booking_id: flt_221
+            booking_type: flight
+            destination: Los Angeles
+            departure_time: "2026-05-10 11:40"
+          - booking_id: flt_447
+            booking_type: flight
+            destination: Portland
+            departure_time: "2026-05-16 07:25"
+      booking.get_booking_status:
+        booking:
+          booking_id: flt_221
+          status: confirmed
+          cancelable: true
+          refund_type: airline_credit
+          cancellation_fee: 35
+          linked_bookings: []
+      booking.cancel_booking:
+        cancelled: true
+        booking_id: flt_221
+    tool_state_updates:
+      booking.cancel_booking:
+        bookings:
+          active:
+            - booking_id: flt_221
+              destination: Los Angeles
+              departure_time: "2026-05-10 11:40"
+              status: cancelled
+            - booking_id: flt_447
+              destination: Portland
+              departure_time: "2026-05-16 07:25"
+              status: confirmed
+execution_rules:
+  - 必须先通过列表工具定位洛杉矶航班。
+  - 必须检查取消规则后才能执行取消。
+  - 在该航班可取消且无关键关联冲突时，应完成取消。
+evaluation_rubric: []

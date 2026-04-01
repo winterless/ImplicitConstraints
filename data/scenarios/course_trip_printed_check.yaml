@@ -1,0 +1,79 @@
+id: course_trip_printed_check
+category: implicit_reasoning
+user_prompt: 帮我核对专注时段、课程进度、冰岛出行时间，以及课程清单是否已打印贴在书桌前。
+original_question: 我准备按工作日晚间20:00-22:00的固定专注时段继续推进《数据分析基础》直到2026年2月的冰岛出行前。请帮我核对：课程的平台与名称、我目前的完成进度、固定专注时段、以及出行的时间与目的地，并确认是否已经把课程清单打印贴在书桌前。
+tool_category: study_trip_readiness
+implicit_reason: 用户表面上是在做事实核对，真实目标是确认当前学习计划是否按预期推进。系统需要同时核对课程状态、固定学习节奏、旅行截止点和线下提醒物是否就位，而不是只返回其中一两项信息。
+hidden_constraints:
+  - 课程进度必须和固定专注节奏一起看，不能只报完成节数。
+  - 出行时间是后续学习安排的截止锚点。
+  - 打印并贴在书桌前属于实体状态，需要验证而不是假设。
+  - 最终输出应覆盖全部核对项，不能遗漏任何一项。
+suggested_plan:
+  - 查询课程概览和固定学习安排。
+  - 查询冰岛出行摘要。
+  - 检查书桌前的课程清单状态。
+  - 用事实项汇总核对结果。
+max_steps: 5
+allowed_tools:
+  - device:travel.get_trip_brief
+  - device:booking.list_upcoming_bookings
+  - device:booking.get_booking_status
+  - device:booking.cancel_booking
+  - device:reservations.get_details
+  - device:reservations.cancel
+  - device:learning.get_course_overview
+  - device:workspace.inspect_item_status
+  - device:schedule.get_next_event
+  - device:schedule.list_free_slots
+  - device:events.get_venue_details
+  - device:weather.get_forecast
+  - device:weather.check_weather
+  - device:power.get_battery_status
+  - device:power.freeze_background_apps
+  - device:power.apply_saving_plan
+  - device:notifications.set_delivery_policy
+  - device:focus.start_session
+  - device:profile.get_user_labels
+  - device:note.search
+  - device:note.open
+  - device:reminder.create
+  - device:alarm.create
+  - device:timer.create
+world:
+  context:
+    date: "2026-01-08"
+    local_time: "20:15"
+    city: Seattle
+    scenario_source: query_top100_batch1
+    source_query_id: seed_dataset_turn_e_part1.jsonl#61
+  state:
+    tool_responses:
+      learning.get_course_overview:
+        course:
+          title: 数据分析基础
+          platform: LearnLab
+          progress_completed: 18
+          progress_total: 32
+          recurring_focus_window:
+            weekdays: Mon-Fri
+            start_time: "20:00"
+            end_time: "22:00"
+      travel.get_trip_brief:
+        trip:
+          destination: Iceland
+          departure_date: "2026-02-15"
+          return_date: "2026-02-24"
+          duration_days: 10
+      workspace.inspect_item_status:
+        item_status:
+          item_name: 课程清单
+          printed: true
+          placed: true
+          location: 书桌前
+execution_rules:
+  - 必须同时覆盖课程、专注时段、出行时间和打印状态四类事实。
+  - 不能把旅行信息漏掉，因为它是学习计划的截止锚点。
+  - 打印状态必须基于检查结果，而不是猜测。
+  - 最终输出应以核对结果为中心，而不是泛化建议。
+evaluation_rubric: []

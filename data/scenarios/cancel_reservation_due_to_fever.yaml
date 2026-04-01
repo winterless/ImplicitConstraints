@@ -1,0 +1,68 @@
+id: cancel_reservation_due_to_fever
+category: implicit_reasoning
+user_prompt: 因为发烧和医生建议限制出行，帮我取消我即将到来的预订。
+original_question: Hi, I need to cancel my upcoming reservation. I’ve developed a high fever and my doctor advised me not to travel.
+tool_category: reservation_cancellation_medical
+implicit_reason: The user asks to cancel a reservation, but the real task is to do so safely under a medically justified travel restriction. The system should inspect the reservation policy first and determine whether the medical rationale is already sufficient for protected cancellation or whether the user should be routed to an alternative instead.
+hidden_constraints:
+  - Reservation details and medical-waiver eligibility must be checked before cancellation.
+  - If required medical documentation is missing, the system should not blindly cancel.
+  - The response should explain whether cancellation is safely possible now.
+  - A safer fallback such as voucher or support escalation is preferable to a loss-heavy cancellation.
+suggested_plan:
+  - Inspect reservation details and medical exception policy.
+  - Check whether the current documentation status enables safe cancellation.
+  - Cancel only if the protected path is available; otherwise stop with alternatives.
+max_steps: 4
+allowed_tools:
+  - device:reservations.get_details
+  - device:reservations.cancel
+  - device:booking.list_upcoming_bookings
+  - device:booking.get_booking_status
+  - device:booking.cancel_booking
+  - device:travel.get_trip_brief
+  - device:schedule.get_next_event
+  - device:schedule.list_free_slots
+  - device:weather.get_forecast
+  - device:reminder.create
+  - device:weather.check_weather
+  - device:alarm.create
+  - device:events.get_venue_details
+  - device:profile.get_user_labels
+  - device:note.search
+  - device:timer.create
+world:
+  context:
+    date: "2026-04-20"
+    local_time: "11:40"
+    city: Boston
+    scenario_source: query_top100_batch3
+    source_query_id: seed_dataset_turn_e_part4.jsonl#122
+  state:
+    reservations:
+      current:
+        reservation_id: res_911
+        status: active
+        cancelable: false
+    tool_responses:
+      reservations.get_details:
+        reservation:
+          reservation_id: res_911
+          type: flight_hotel_package
+          status: active
+          cancelable: false
+          medical_exception_supported: true
+          documentation_on_file: false
+          penalty_amount: 240
+          refund_type: voucher_only
+          alternatives:
+            - upload_medical_note_for_fee_waiver
+            - request_date_change
+      reservations.cancel:
+        cancelled: false
+        reservation_id: res_911
+execution_rules:
+  - 必须先检查预订详情和医疗例外条件，再决定是否取消。
+  - 若缺少必要医疗材料，不能把取消视为已安全完成。
+  - 最终输出应说明当前为什么不宜直接取消，以及更安全的下一步。
+evaluation_rubric: []

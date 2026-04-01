@@ -1,0 +1,85 @@
+id: confirm_accidental_order_before_cancellation
+category: implicit_reasoning
+user_prompt: 我误下了一单，先帮我确认风险，再决定要不要取消。
+original_question: Hi, I need to cancel an order I accidentally placed. Can you help me with that?
+tool_category: 电商订单取消
+implicit_reason: 用户表面上是在请求取消误下单，但真实目标是先确认这次取消是否会带来优惠回退或其他副作用，再决定是否立即执行。
+hidden_constraints:
+  - 必须先定位误下单对象，而不是直接取消最近一笔订单。
+  - 必须检查取消后是否会失去组合优惠或影响同批次商品价格。
+  - 在存在明显副作用时，应先说明风险并等待确认。
+  - 不应因为有取消工具就直接执行。
+suggested_plan:
+  - 列出近期订单候选并定位误下单对象。
+  - 查询该订单状态和取消规则。
+  - 若副作用明显，停在待确认节点。
+max_steps: 5
+allowed_tools:
+  - device:commerce.list_recent_orders
+  - device:commerce.get_recent_order_status
+  - device:commerce.get_order_policy
+  - device:commerce.cancel_order
+  - device:profile.get_user_labels
+  - device:schedule.get_next_event
+  - device:schedule.list_free_slots
+  - device:reminder.create
+  - device:timer.create
+  - device:note.search
+  - device:notifications.set_delivery_policy
+  - device:alarm.create
+  - device:note.open
+world:
+  context:
+    date: "2026-04-29"
+    local_time: "21:06"
+    city: Chicago
+    scenario_source: query_top100_batch4
+    source_query_id: seed_dataset_turn_e_part5.jsonl#4
+  state:
+    orders:
+      current:
+        order_id: ord_1180
+        status: awaiting_fulfillment
+        cancelable: true
+    tool_responses:
+      commerce.list_recent_orders:
+        orders:
+          - order_id: ord_1180
+            item_name: Air fryer liners
+            placed_at: "2026-04-29 20:49"
+            status: awaiting_fulfillment
+          - order_id: ord_1179
+            item_name: Air fryer
+            placed_at: "2026-04-29 20:47"
+            status: confirmed
+      commerce.get_recent_order_status:
+        order:
+          order_id: ord_1180
+          item_name: Air fryer liners
+          placed_at: "2026-04-29 20:49"
+          status: awaiting_fulfillment
+          cancelable: true
+          processing_started: false
+      commerce.get_order_policy:
+        policy:
+          order_id: ord_1180
+          cancellation_deadline: "2026-04-29 21:30"
+          refund_type: original_payment_method
+          refund_delay_hours: 4
+          bundle_discount_reversal: true
+          bundle_note: 取消后主商品 air fryer 的组合优惠会回退 10 美元
+      commerce.cancel_order:
+        cancelled: true
+        order_id: ord_1180
+    tool_state_updates:
+      commerce.cancel_order:
+        orders:
+          current:
+            order_id: ord_1180
+            status: cancelled
+            cancelable: false
+execution_rules:
+  - 必须先列出近期订单并识别误下单对象。
+  - 必须检查取消副作用。
+  - 当取消会导致同批次组合优惠回退时，未获进一步确认前不应直接取消。
+evaluation_rubric: []

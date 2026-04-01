@@ -1,0 +1,88 @@
+id: check_laptop_order_before_shipping
+category: implicit_reasoning
+user_prompt: 帮我看看那台笔记本订单现在还能不能在发货前取消。
+original_question: Hi, I need some help canceling a laptop order I placed recently. I accidentally ordered it by mistake and would like to cancel it before it ships.
+tool_category: 电商订单可取消性判断
+implicit_reason: 用户表面上是在请求取消笔记本订单，但真实目标是先判断是否仍在发货前取消窗口内，并了解取消后是否会全额退款，再决定是否执行。
+hidden_constraints:
+  - 需要先在近期订单中定位笔记本订单。
+  - 必须确认该订单尚未发货，且仍在取消窗口内。
+  - 必须检查高价值商品是否存在手续费或到账延迟。
+  - 由于用户当前更明确是在询问“还能不能取消”，未获进一步确认前不应直接执行取消。
+suggested_plan:
+  - 列出近期订单，定位笔记本订单。
+  - 查询当前状态和取消规则。
+  - 输出是否还能取消，并说明退款和截止时间。
+max_steps: 5
+allowed_tools:
+  - device:commerce.list_recent_orders
+  - device:commerce.get_recent_order_status
+  - device:commerce.get_order_policy
+  - device:commerce.cancel_order
+  - device:profile.get_user_labels
+  - device:schedule.get_next_event
+  - device:schedule.list_free_slots
+  - device:reminder.create
+  - device:timer.create
+  - device:note.search
+  - device:notifications.set_delivery_policy
+  - device:documents.get_active_document
+  - device:documents.parse_pdf
+  - device:note.open
+  - device:messaging.open_contact_thread
+  - device:alarm.create
+world:
+  context:
+    date: "2026-04-30"
+    local_time: "16:54"
+    city: Austin
+    scenario_source: query_top100_batch4
+    source_query_id: seed_dataset_turn_e_part4.jsonl#97
+  state:
+    orders:
+      current:
+        order_id: ord_1208
+        status: payment_authorized
+        cancelable: true
+    tool_responses:
+      commerce.list_recent_orders:
+        orders:
+          - order_id: ord_1208
+            item_name: Laptop 14-inch
+            placed_at: "2026-04-30 15:38"
+            status: payment_authorized
+          - order_id: ord_1209
+            item_name: USB-C Dock
+            placed_at: "2026-04-30 15:39"
+            status: confirmed
+      commerce.get_recent_order_status:
+        order:
+          order_id: ord_1208
+          item_name: Laptop 14-inch
+          placed_at: "2026-04-30 15:38"
+          status: payment_authorized
+          cancelable: true
+          shipping_label_created: false
+          estimated_ship_time: "2026-04-30 18:00"
+      commerce.get_order_policy:
+        policy:
+          order_id: ord_1208
+          cancellation_deadline: "2026-04-30 17:40"
+          refund_type: original_payment_method
+          refund_delay_hours: 24
+          restocking_fee: 0
+      commerce.cancel_order:
+        cancelled: true
+        order_id: ord_1208
+    tool_state_updates:
+      commerce.cancel_order:
+        orders:
+          current:
+            order_id: ord_1208
+            status: cancelled
+            cancelable: false
+execution_rules:
+  - 必须先定位笔记本订单，再检查状态与规则。
+  - 正确完成条件是说明该订单当前仍可取消、截止时间是什么、退款多久到账。
+  - 未获进一步确认前不应直接执行取消。
+evaluation_rubric: []

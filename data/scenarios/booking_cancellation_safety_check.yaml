@@ -1,0 +1,67 @@
+id: booking_cancellation_safety_check
+category: implicit_reasoning
+user_prompt: 帮我取消这个预订，不过先判断现在这么做安不安全。
+original_question: Hi, I need some help with my reservation. I’d like to cancel my booking due to a change of plans.
+tool_category: reservation_cancellation_safety
+implicit_reason: The user is not only asking to cancel, but explicitly asking whether it is safe to do so now. The system must inspect the booking's cancellation deadline, loss exposure, and alternatives before deciding whether cancellation should happen at all.
+hidden_constraints:
+  - The booking must be inspected before any cancellation attempt.
+  - Because the user asks whether it is safe, high-loss cancellation should not be executed automatically.
+  - The final answer should include a yes/no safety judgment with key reasons.
+  - If cancellation is not safe, the agent should surface alternatives instead of forcing the action.
+suggested_plan:
+  - Read the reservation details.
+  - Evaluate whether cancellation is still safe under the current policy.
+  - Cancel only if the safety check is clearly favorable; otherwise stop and explain alternatives.
+max_steps: 4
+allowed_tools:
+  - device:reservations.get_details
+  - device:reservations.cancel
+  - device:booking.list_upcoming_bookings
+  - device:booking.get_booking_status
+  - device:booking.cancel_booking
+  - device:travel.get_trip_brief
+  - device:schedule.get_next_event
+  - device:schedule.list_free_slots
+  - device:weather.get_forecast
+  - device:reminder.create
+  - device:weather.check_weather
+  - device:alarm.create
+  - device:events.get_venue_details
+  - device:profile.get_user_labels
+  - device:note.search
+  - device:timer.create
+world:
+  context:
+    date: "2026-04-19"
+    local_time: "18:35"
+    city: Chicago
+    scenario_source: query_top100_batch2
+    source_query_id: seed_dataset_turn_e_part4.jsonl#195
+  state:
+    reservations:
+      current:
+        reservation_id: res_771
+        status: active
+        cancelable: false
+    tool_responses:
+      reservations.get_details:
+        reservation:
+          reservation_id: res_771
+          type: event_ticket
+          status: active
+          cancelable: false
+          cancellation_deadline: "2026-04-19 17:30"
+          refund_type: partial
+          penalty_amount: 96
+          alternatives:
+            - reschedule
+            - voucher
+      reservations.cancel:
+        cancelled: false
+        reservation_id: res_771
+execution_rules:
+  - 必须先检查预订详情，再判断是否安全取消。
+  - 如果取消窗口已过且损失较大，不能直接执行取消。
+  - 最终输出应明确说明为什么现在不安全以及有哪些替代路径。
+evaluation_rubric: []

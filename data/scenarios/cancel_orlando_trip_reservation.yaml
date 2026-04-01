@@ -1,0 +1,76 @@
+id: cancel_orlando_trip_reservation
+category: implicit_reasoning
+user_prompt: 取消我的奥兰多行程预订。
+original_question: Hi there. I have an upcoming reservation for a trip to Orlando, but unfortunately, I need to cancel it. Can you help me with that?
+tool_category: 旅行预订取消
+implicit_reason: 这题不是单纯的“预订取消按钮题”，而是要求模型先查清这张 Orlando 行程预订的罚金、截止时间与替代方案，再决定是否取消。若允许取消，模型应该完成操作；若损失高也应在说明中体现。
+hidden_constraints:
+  - 必须先查看 Orlando 行程预订详情。
+  - 必须检查是否仍可取消以及罚金金额。
+  - 在允许取消时，应真正执行取消。
+  - 结果中应体现取消代价或退款方式。
+suggested_plan:
+  - 查询该旅行预订详情。
+  - 判断取消资格、罚金和替代路径。
+  - 在仍可取消时执行取消。
+max_steps: 4
+allowed_tools:
+  - device:reservations.get_details
+  - device:reservations.cancel
+  - device:booking.list_upcoming_bookings
+  - device:booking.get_booking_status
+  - device:booking.cancel_booking
+  - device:travel.get_trip_brief
+  - device:schedule.get_next_event
+  - device:schedule.list_free_slots
+  - device:weather.get_forecast
+  - device:reminder.create
+  - device:weather.check_weather
+  - device:alarm.create
+  - device:events.get_venue_details
+  - device:profile.get_user_labels
+  - device:note.search
+  - device:timer.create
+world:
+  context:
+    date: "2026-06-02"
+    local_time: "18:05"
+    city: Atlanta
+    scenario_source: query_top100_batch4
+    source_query_id: seed_dataset_turn_e_part4.jsonl#133
+  state:
+    reservations:
+      current:
+        reservation_id: trip_420
+        destination: Orlando
+        status: booked
+        cancelable: true
+    tool_responses:
+      reservations.get_details:
+        reservation:
+          reservation_id: trip_420
+          destination: Orlando
+          status: booked
+          cancelable: true
+          cancellation_deadline: "2026-06-03 12:00"
+          penalty_amount: 45
+          refund_type: travel_credit
+          alternatives:
+            - reschedule
+            - partial_credit
+      reservations.cancel:
+        cancelled: true
+        reservation_id: trip_420
+    tool_state_updates:
+      reservations.cancel:
+        reservations:
+          current:
+            reservation_id: trip_420
+            destination: Orlando
+            status: cancelled
+            cancelable: false
+execution_rules:
+  - 必须先查询预订详情，再决定是否取消。
+  - 在预订仍可取消时，应执行取消。
+  - 结果应体现罚金或退款方式。
+evaluation_rubric: []

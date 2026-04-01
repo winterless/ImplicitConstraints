@@ -1,0 +1,66 @@
+id: btc_buy_sell_decision
+category: implicit_reasoning
+user_prompt: 我现在应该买入还是卖出 BTC？
+original_question: Can you tell me the current price of Bitcoin (BTC) on Bitget? I need this to help me decide whether to buy or sell.
+tool_category: crypto_trade_judgment
+implicit_reason: The user superficially asks for price, but the real task is to make a near-term trading judgment. The system must combine current market context with the user's existing position and risk profile, then provide a recommendation with reasons rather than a raw quote.
+hidden_constraints:
+  - Price lookup alone is insufficient; the recommendation must account for current trend context.
+  - The user's existing BTC position and average cost materially affect whether buy or sell is more reasonable.
+  - The final answer should include a clear recommendation with key reasons, not just a number.
+  - The system should avoid aggressive advice that ignores risk and overextension signals.
+suggested_plan:
+  - Query the current BTC quote and recent trend on Bitget.
+  - Query the user's current BTC position and cost basis.
+  - Use both to decide whether buying or selling is more justified right now.
+max_steps: 4
+allowed_tools:
+  - device:market.get_asset_quote
+  - device:portfolio.get_asset_position
+  - device:profile.get_user_labels
+  - device:note.search
+  - device:note.open
+  - device:schedule.get_next_event
+  - device:schedule.list_free_slots
+  - device:documents.get_active_document
+  - device:documents.parse_pdf
+  - device:usage.get_app_activity
+  - device:billing.scan_subscription_charges
+  - device:subscriptions.get_cancellation_options
+  - device:subscriptions.cancel
+  - device:reminder.create
+  - device:timer.create
+  - device:alarm.create
+world:
+  context:
+    date: "2026-04-19"
+    local_time: "21:10"
+    city: Singapore
+    scenario_source: query_top100_batch2
+    source_query_id: seed_dataset_turn_e_part3.jsonl#108
+  state:
+    tool_responses:
+      market.get_asset_quote:
+        asset:
+          symbol: BTC
+          venue: Bitget
+          current_price_usd: 112800
+          change_24h_pct: 0.8
+          change_7d_pct: 8.9
+          trend_7d: overextended_uptrend
+          support_zone_usd: "108000-109500"
+          resistance_zone_usd: "113000-114500"
+          momentum_signal: overbought
+      portfolio.get_asset_position:
+        position:
+          symbol: BTC
+          quantity: 0.45
+          average_cost_usd: 108400
+          portfolio_weight_pct: 32
+          risk_tolerance: moderate
+          needs_cash_soon: false
+execution_rules:
+  - 必须结合市场报价和用户持仓上下文来做判断，不能只报价格。
+  - 最终输出应明确偏向买入还是卖出，并给出关键理由。
+  - 不能忽略价格接近阻力位和用户已盈利仓位这两个核心证据。
+evaluation_rubric: []

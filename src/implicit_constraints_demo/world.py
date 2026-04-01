@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 import json
 from typing import Any
 
-from .llm_client import ChatCompletionClient, extract_first_json_object
+from .llm_client import ChatCompletionClient
 from .schemas import Scenario, ToolCall, ToolDescriptor, ToolResult
 from .tool_registry import ToolRegistry
 
@@ -236,8 +236,9 @@ class LLMWorldModel(BaseWorld):
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ]
-        raw_response = self.client.chat_completion(request_messages)
-        parsed = extract_first_json_object(raw_response)
+        completion = self.client.chat_completion_json(request_messages, repair_retries=1)
+        raw_response = completion.content
+        parsed = completion.parsed
         result = _normalize_world_model_result(parsed, descriptor)
         if result.success and result.state_changes:
             _deep_merge(self.state, deepcopy(result.state_changes))
@@ -246,6 +247,7 @@ class LLMWorldModel(BaseWorld):
             "request_messages": request_messages,
             "raw_response": raw_response,
             "parsed_response": parsed,
+            "repair_attempts": completion.repair_attempts,
         }
         return result
 
@@ -267,18 +269,19 @@ def build_world(
 
 def _build_world_model_system_prompt() -> str:
     return (
-        "You are the World Model for an implicit-intelligence benchmark.\n"
-        "You simulate the environment for exactly one tool call.\n"
-        "Your role is constrained and mechanical, not creative.\n"
-        "Rules:\n"
-        "1. Use only the provided scenario context, execution rules, current world state, tool descriptor, and tool call.\n"
-        "2. Do not help the agent, reveal hidden constraints, or give advice.\n"
-        "3. If the tool descriptor includes a returns field, treat it as the primary return template. Otherwise use success_response_schema as the return shape for successful calls.\n"
-        "4. Read-only operations must return state_changes as {}.\n"
-        "5. State-modifying operations may return a partial state_changes object that can be deep-merged into the world state.\n"
-        "6. If the tool should fail based on current state or rules, set success=false and explain why neutrally.\n"
-        "7. Return exactly one JSON object with keys thought_process, success, message, data, state_changes.\n"
-        "Do not use markdown fences."
+        "你是一个隐式约束基准中的世界模型。\n"
+        "你只负责模拟一次工具调用对应的环境响应。\n"
+        "你的角色应当机械、克制、基于规则，而不是创造性发挥。\n"
+        "规则：\n"
+        "1. 只能使用提供给你的场景上下文、执行规则、当前世界状态、工具描述和工具调用信息。\n"
+        "2. 不要帮助智能体，不要泄露隐藏约束，也不要给建议。\n"
+        "3. 如果工具描述中有 returns 字段，优先把它当作返回模板；否则使用 success_response_schema 作为成功返回形状。\n"
+        "4. 只读操作必须返回 state_changes = {}。\n"
+        "5. 修改状态的操作可以返回一个可被深度合并进世界状态的局部 state_changes 对象。\n"
+        "6. 如果基于当前状态或规则，这个工具调用应当失败，就设置 success=false，并用中性中文解释原因。\n"
+        "7. thought_process 和 message 字段必须使用中文。\n"
+        "8. 必须只返回一个包含 thought_process、success、message、data、state_changes 的 JSON 对象。\n"
+        "不要使用 markdown 代码块围栏。"
     )
 
 
@@ -289,15 +292,15 @@ def _build_world_model_user_prompt(
     tool_call: ToolCall,
 ) -> str:
     return (
-        f"Scenario ID: {scenario.scenario_id}\n"
-        f"Category: {scenario.category}\n"
-        f"User prompt: {scenario.user_prompt}\n\n"
-        f"Scenario context:\n{json.dumps(scenario.context, ensure_ascii=False, indent=2)}\n\n"
-        f"Execution rules:\n{json.dumps(scenario.execution_rules, ensure_ascii=False, indent=2)}\n\n"
-        f"Current world state:\n{json.dumps(current_state, ensure_ascii=False, indent=2)}\n\n"
-        f"Tool descriptor:\n{json.dumps(_descriptor_payload(descriptor), ensure_ascii=False, indent=2)}\n\n"
-        f"Tool call:\n{json.dumps({'server': tool_call.server, 'tool_name': tool_call.tool_name, 'arguments': tool_call.arguments}, ensure_ascii=False, indent=2)}\n\n"
-        "Simulate the environment response for this one action."
+        f"场景 ID：{scenario.scenario_id}\n"
+        f"场景类别：{scenario.category}\n"
+        f"用户请求：{scenario.user_prompt}\n\n"
+        f"场景上下文：\n{json.dumps(scenario.context, ensure_ascii=False, indent=2)}\n\n"
+        f"执行规则：\n{json.dumps(scenario.execution_rules, ensure_ascii=False, indent=2)}\n\n"
+        f"当前世界状态：\n{json.dumps(current_state, ensure_ascii=False, indent=2)}\n\n"
+        f"工具描述：\n{json.dumps(_descriptor_payload(descriptor), ensure_ascii=False, indent=2)}\n\n"
+        f"工具调用：\n{json.dumps({'server': tool_call.server, 'tool_name': tool_call.tool_name, 'arguments': tool_call.arguments}, ensure_ascii=False, indent=2)}\n\n"
+        "请只模拟这一次动作对应的环境响应，并以中文填写解释字段。"
     )
 
 

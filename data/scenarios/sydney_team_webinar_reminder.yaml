@@ -1,0 +1,75 @@
+id: sydney_team_webinar_reminder
+category: implicit_reasoning
+user_prompt: 一场 UTC 上午 9 点的网络研讨会，我应该给悉尼团队设在什么时间提醒？
+original_question: I have a webinar scheduled in New York at 9 AM UTC. What time should I schedule the reminder for my team based in Sydney?
+tool_category: cross_timezone_reminder
+implicit_reason: The user is not only asking for a time conversion, but for a locally actionable reminder time for a distributed team. The system must convert the webinar time into Sydney local time, apply an appropriate lead-time buffer, and create the reminder in the target timezone rather than just echoing the event time.
+hidden_constraints:
+  - The reminder should be based on Sydney local time, not UTC or New York local time.
+  - A reminder needs lead time before the webinar, not the webinar start itself.
+  - The system should create or specify the actual reminder time, not just the converted event time.
+  - DST-aware conversion must be handled correctly.
+suggested_plan:
+  - Convert 9 AM UTC into Sydney local time.
+  - Apply a practical reminder buffer.
+  - Create the team reminder at the resulting local time.
+max_steps: 4
+allowed_tools:
+  - device:time.convert_timezone
+  - device:schedule.get_next_event
+  - device:schedule.list_free_slots
+  - device:travel.get_trip_brief
+  - device:weather.get_forecast
+  - device:weather.check_weather
+  - device:power.get_battery_status
+  - device:power.freeze_background_apps
+  - device:power.apply_saving_plan
+  - device:profile.get_user_labels
+  - device:note.search
+  - device:note.open
+  - device:reminder.create
+  - device:timer.create
+  - device:alarm.create
+world:
+  context:
+    date: "2026-04-20"
+    local_time: "16:10"
+    city: New York
+    scenario_source: query_top100_batch3
+    source_query_id: seed_dataset_turn_e_part3.jsonl#158
+  state:
+    reminders: {}
+    tool_responses:
+      time.convert_timezone:
+        converted:
+          source_time: "2026-04-21 09:00"
+          source_timezone: UTC
+          target_timezone: Australia/Sydney
+          local_event_date: "2026-04-21"
+          local_event_time: "19:00"
+          lead_minutes: 20
+          recommended_reminder_at: "2026-04-21 18:40"
+      reminder.create:
+        reminder_id: webinar_team_441
+    tool_state_updates:
+      reminder.create:
+        reminders:
+          webinar_team_441:
+            title: Sydney team webinar reminder
+            remind_at: "2026-04-21 18:40"
+            note: Webinar starts at 19:00 Sydney time
+execution_rules:
+  - 必须先完成时区转换，再设置提醒。
+  - 创建的提醒时间必须是 Sydney 本地时间且早于 webinar 开始时间。
+  - 不能把 9 AM UTC 直接当成提醒时间。
+evaluation_rubric:
+  - criterion: The agent converted the webinar time before creating a reminder.
+    check:
+      type: action_before
+      first: device:time.convert_timezone
+      second: device:reminder.create
+  - criterion: A reminder was created at the Sydney-local buffered time.
+    check:
+      type: state_eq
+      path: reminders.webinar_team_441.remind_at
+      value: "2026-04-21 18:40"

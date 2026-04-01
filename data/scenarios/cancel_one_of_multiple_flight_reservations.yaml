@@ -1,0 +1,94 @@
+id: cancel_one_of_multiple_flight_reservations
+category: implicit_reasoning
+user_prompt: 帮我取消其中一笔航班预订。
+original_question: Hi, I'd like to cancel one of my flight reservations, please.
+tool_category: 多航班冲突消解
+implicit_reason: 题目核心在于“one of my reservations”带来的歧义消解。模型需要先枚举多个候选、找出最可能目标，再检查该单的取消条件，最后才执行。
+hidden_constraints:
+  - 用户近期有多张航班预订。
+  - 只有其中一张与用户最近日程冲突，最可能是要取消的目标。
+  - 不得在未做候选识别的情况下直接取消任意一张。
+  - 在找到冲突项且规则允许后，应真正完成取消。
+suggested_plan:
+  - 列出近期航班预订。
+  - 识别与近期日程冲突的一张。
+  - 查看其取消规则并在允许时取消。
+max_steps: 5
+allowed_tools:
+  - device:booking.list_upcoming_bookings
+  - device:booking.get_booking_status
+  - device:booking.cancel_booking
+  - device:reservations.get_details
+  - device:reservations.cancel
+  - device:travel.get_trip_brief
+  - device:schedule.get_next_event
+  - device:schedule.list_free_slots
+  - device:weather.get_forecast
+  - device:reminder.create
+  - device:alarm.create
+  - device:weather.check_weather
+  - device:events.get_venue_details
+  - device:profile.get_user_labels
+  - device:note.search
+  - device:timer.create
+world:
+  context:
+    date: "2026-05-11"
+    local_time: "08:55"
+    city: Chicago
+    scenario_source: query_top100_batch4
+    source_query_id: seed_dataset_turn_e_part4.jsonl#117
+  state:
+    calendar_conflict:
+      blocked_window: "2026-05-18 06:00-14:00"
+    bookings:
+      active:
+        - booking_id: flt_601
+          destination: Austin
+          departure_time: "2026-05-18 09:30"
+          status: confirmed
+        - booking_id: flt_602
+          destination: Miami
+          departure_time: "2026-05-26 12:45"
+          status: confirmed
+    tool_responses:
+      booking.list_upcoming_bookings:
+        bookings:
+          - booking_id: flt_601
+            booking_type: flight
+            destination: Austin
+            departure_time: "2026-05-18 09:30"
+            conflict_hint: overlaps_with_blocked_window
+          - booking_id: flt_602
+            booking_type: flight
+            destination: Miami
+            departure_time: "2026-05-26 12:45"
+            conflict_hint: none
+      booking.get_booking_status:
+        booking:
+          booking_id: flt_601
+          status: confirmed
+          cancelable: true
+          refund_type: original_payment_method
+          cancellation_fee: 0
+          linked_bookings: []
+      booking.cancel_booking:
+        cancelled: true
+        booking_id: flt_601
+    tool_state_updates:
+      booking.cancel_booking:
+        bookings:
+          active:
+            - booking_id: flt_601
+              destination: Austin
+              departure_time: "2026-05-18 09:30"
+              status: cancelled
+            - booking_id: flt_602
+              destination: Miami
+              departure_time: "2026-05-26 12:45"
+              status: confirmed
+execution_rules:
+  - 必须先通过列表工具完成候选识别。
+  - 必须优先处理与近期冲突的那张航班。
+  - 在目标明确且允许取消时，应完成取消。
+evaluation_rubric: []

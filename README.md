@@ -35,17 +35,33 @@ python -m pip install -e .
 
 默认会读取根目录下的 `llm_config.yaml`。如果不额外传参数，`agent / world / evaluator` 三个角色都会按配置文件运行；仓库默认配置是三者都走 LLM。
 
+这个仓库使用的是 `src/` 布局，所以有两种运行方式：
+
+1. 先安装包，再直接运行：
+
+```bash
+python -m pip install -e .
+python -m implicit_constraints_demo.main --scenario data/scenarios/airport_route_time.yaml
+```
+
+2. 不安装包，直接从仓库根目录运行：
+
+```bash
+PYTHONPATH=src python -m implicit_constraints_demo.main \
+  --scenario data/scenarios/airport_route_time.yaml
+```
+
 如果你已经在配置文件里填好了可用的 LLM endpoint / API key，直接运行：
 
 ```bash
-python -m implicit_constraints_demo.main \
+PYTHONPATH=src python -m implicit_constraints_demo.main \
   --scenario data/scenarios/airport_route_time.yaml
 ```
 
 如果你想强制使用本地 deterministic world：
 
 ```bash
-python -m implicit_constraints_demo.main \
+PYTHONPATH=src python -m implicit_constraints_demo.main \
   --scenario data/scenarios/airport_route_time.yaml \
   --world-mode mock
 ```
@@ -53,7 +69,7 @@ python -m implicit_constraints_demo.main \
 如果已经配置了 API key，并希望更贴近论文里的 Agent-as-a-World 设计，可以让 world 也由单独的 LLM 来模拟：
 
 ```bash
-python -m implicit_constraints_demo.main \
+PYTHONPATH=src python -m implicit_constraints_demo.main \
   --scenario data/scenarios/airport_route_time.yaml \
   --world-mode llm
 ```
@@ -67,7 +83,7 @@ runs/airport_route_time.json
 如果想自定义输出目录：
 
 ```bash
-python -m implicit_constraints_demo.main \
+PYTHONPATH=src python -m implicit_constraints_demo.main \
   --scenario data/scenarios/airport_route_time.yaml \
   --world-mode mock \
   --output runs/custom
@@ -82,7 +98,7 @@ runs/custom/airport_route_time.json
 如果不传 `--scenario`，会自动扫描 `data/scenarios/` 下所有可执行场景并批量运行，跳过像 catalog 这类不可执行 YAML：
 
 ```bash
-python -m implicit_constraints_demo.main \
+PYTHONPATH=src python -m implicit_constraints_demo.main \
   --world-mode mock
 ```
 
@@ -150,6 +166,42 @@ API key 读取顺序：
 3. 该角色配置里的 `api_key_file`
 
 `.secrets/` 已加入 `.gitignore`，避免误提交密钥。
+
+按不同配置文件运行的常用命令：
+
+1. 使用默认配置 `llm_config.yaml`：
+
+```bash
+PYTHONPATH=src python -m implicit_constraints_demo.main \
+  --config llm_config.yaml \
+  --scenario data/scenarios/airport_route_time.yaml
+```
+
+2. 显式使用 `llm_config_qwen3.5plus.yaml`：
+
+```bash
+PYTHONPATH=src python -m implicit_constraints_demo.main \
+  --config llm_config_qwen3.5plus.yaml \
+  --scenario data/scenarios/airport_route_time.yaml
+```
+
+3. 使用 `llm_config_qwen3local.yaml`，让 `agent` 走本地 OpenAI-compatible 服务：
+
+```bash
+PYTHONPATH=src python -m implicit_constraints_demo.main \
+  --config llm_config_qwen3local.yaml \
+  --scenario data/scenarios/airport_route_time.yaml
+```
+
+其中 `llm_config_qwen3local.yaml` 里的 `agent.base_url` 指向 `http://127.0.0.1:8000/v1`，所以需要先启动本地兼容 OpenAI 的推理服务；同时该配置里的 `world` 和 `evaluator` 仍然使用 DashScope，因此对应 API key 也仍需可用。
+
+如果想批量跑 `data/scenarios/` 下的所有场景，也可以直接替换配置文件：
+
+```bash
+PYTHONPATH=src python -m implicit_constraints_demo.main --config llm_config.yaml
+PYTHONPATH=src python -m implicit_constraints_demo.main --config llm_config_qwen3.5plus.yaml
+PYTHONPATH=src python -m implicit_constraints_demo.main --config llm_config_qwen3local.yaml
+```
 
 常用覆盖参数：
 

@@ -4,7 +4,7 @@ server: device
 description: 面向中文移动端隐式约束场景的 MCP 风格工具清单。tool_name 保持纯英文，其他说明以中文为主。
 tools:
   - tool_name: photos.search_by_metadata
-    description: 按时间、地点、相册、关键词等元数据检索照片。
+    description: 按时间、地点、相册、关键词等元数据检索照片。优先使用 start_date/end_date/location_query，也兼容 time_range/location 这类自然语言生成的别名参数。
     input_schema:
       type: object
       properties:
@@ -13,6 +13,10 @@ tools:
         end_date:
           type: string
         location_query:
+          type: string
+        time_range:
+          type: string
+        location:
           type: string
         album:
           type: string
@@ -132,7 +136,11 @@ tools:
         duration_minutes:
           type: integer
       required:
+        - whitelist_contact_ids
+        - allow_calls
+        - allow_messages
         - mute_other_notifications
+        - duration_minutes
     read_only: false
     success_response_schema:
       type: object
@@ -1320,3 +1328,586 @@ tools:
     failure_conditions:
       - confirmation missing
       - one or more notes cannot be deleted
+
+  - tool_name: weather.compare_cities
+    description: 对两个城市的当前天气和体感条件做并列查询，返回便于比较的结构化结果。
+    input_schema:
+      type: object
+      properties:
+        cities:
+          type: array
+        date:
+          type: string
+      required:
+        - cities
+    read_only: true
+    success_response_schema:
+      type: object
+      properties:
+        cities:
+          type: array
+    state_changes: []
+    failure_conditions:
+      - one or more cities are unsupported
+
+  - tool_name: maps.search_nearby_places
+    description: 按地点、步行距离和类别搜索附近可到达场所。
+    input_schema:
+      type: object
+      properties:
+        origin:
+          type: string
+        place_type:
+          type: string
+        max_walk_minutes:
+          type: integer
+      required:
+        - origin
+        - place_type
+    read_only: true
+    success_response_schema:
+      type: object
+      properties:
+        places:
+          type: array
+    state_changes: []
+    failure_conditions:
+      - no nearby place matched the filters
+
+  - tool_name: booking.get_booking_status
+    description: 查询当前预订状态、可改签/取消规则和相关成本。
+    input_schema:
+      type: object
+      properties:
+        booking_id:
+          type: string
+      required:
+        - booking_id
+    read_only: true
+    success_response_schema:
+      type: object
+      properties:
+        booking:
+          type: object
+    state_changes: []
+    failure_conditions:
+      - booking not found
+
+  - tool_name: booking.list_upcoming_bookings
+    description: 列出用户近期的航班或旅行预订候选，便于在多个预订中定位目标对象。
+    input_schema:
+      type: object
+      properties:
+        booking_type:
+          type: string
+        destination_hint:
+          type: string
+        date_hint:
+          type: string
+      required: []
+    read_only: true
+    success_response_schema:
+      type: object
+      properties:
+        bookings:
+          type: array
+    state_changes: []
+    failure_conditions:
+      - no upcoming booking matched the filters
+
+  - tool_name: booking.cancel_booking
+    description: 取消指定预订。
+    input_schema:
+      type: object
+      properties:
+        booking_id:
+          type: string
+        confirmed:
+          type: boolean
+      required:
+        - booking_id
+        - confirmed
+    read_only: false
+    success_response_schema:
+      type: object
+      properties:
+        cancelled:
+          type: boolean
+        booking_id:
+          type: string
+    state_changes:
+      - bookings[*]
+    failure_conditions:
+      - booking not found
+      - cancellation not allowed
+      - confirmation missing
+
+  - tool_name: family.get_visit_window
+    description: 查询家人近期在某城市停留的起止时间。
+    input_schema:
+      type: object
+      properties:
+        person:
+          type: string
+        city:
+          type: string
+      required:
+        - person
+    read_only: true
+    success_response_schema:
+      type: object
+      properties:
+        visit:
+          type: object
+    state_changes: []
+    failure_conditions:
+      - visit window not found
+
+  - tool_name: network.check_stream_quality
+    description: 查询家庭网络在指定清晰度和场景下的流媒体缓冲表现。
+    input_schema:
+      type: object
+      properties:
+        profile:
+          type: string
+        destination_device:
+          type: string
+      required:
+        - profile
+    read_only: true
+    success_response_schema:
+      type: object
+      properties:
+        network_profile:
+          type: object
+    state_changes: []
+    failure_conditions:
+      - stream quality profile unavailable
+
+  - tool_name: learning.get_course_overview
+    description: 查询某课程的平台、名称、完成进度和关联学习安排。
+    input_schema:
+      type: object
+      properties:
+        course_name:
+          type: string
+      required:
+        - course_name
+    read_only: true
+    success_response_schema:
+      type: object
+      properties:
+        course:
+          type: object
+    state_changes: []
+    failure_conditions:
+      - course not found
+
+  - tool_name: workspace.inspect_item_status
+    description: 检查某个实体物品是否已经打印、摆放或贴在指定位置。
+    input_schema:
+      type: object
+      properties:
+        item_name:
+          type: string
+        expected_location:
+          type: string
+      required:
+        - item_name
+    read_only: true
+    success_response_schema:
+      type: object
+      properties:
+        item_status:
+          type: object
+    state_changes: []
+    failure_conditions:
+      - item status unavailable
+
+  - tool_name: training.get_training_overview
+    description: 查询训练计划中的关键场次、调班记录和历史训练详情。
+    input_schema:
+      type: object
+      properties:
+        program_name:
+          type: string
+      required:
+        - program_name
+    read_only: true
+    success_response_schema:
+      type: object
+      properties:
+        training:
+          type: object
+    state_changes: []
+    failure_conditions:
+      - training overview not found
+
+  - tool_name: account.get_login_status
+    description: 查询当前账号是否已登录、会话是否有效以及可用权限。
+    input_schema:
+      type: object
+      properties: {}
+      required: []
+    read_only: true
+    success_response_schema:
+      type: object
+      properties:
+        account:
+          type: object
+    state_changes: []
+    failure_conditions:
+      - account status unavailable
+
+  - tool_name: prompts.list_saved
+    description: 列出用户已保存的提示词及其标签、用途和适配范围。
+    input_schema:
+      type: object
+      properties:
+        keyword:
+          type: string
+      required: []
+    read_only: true
+    success_response_schema:
+      type: object
+      properties:
+        prompts:
+          type: array
+    state_changes: []
+    failure_conditions:
+      - no prompt matched the filters
+
+  - tool_name: prompts.apply_saved
+    description: 选用指定已保存提示词处理当前文档，并产出结构化结果。
+    input_schema:
+      type: object
+      properties:
+        prompt_id:
+          type: string
+        document_id:
+          type: string
+      required:
+        - prompt_id
+        - document_id
+    read_only: false
+    success_response_schema:
+      type: object
+      properties:
+        applied:
+          type: boolean
+        output_id:
+          type: string
+    state_changes:
+      - documents.outputs[*]
+    failure_conditions:
+      - prompt not found
+      - document not found
+      - prompt cannot be applied
+
+  - tool_name: documents.get_active_document
+    description: 读取当前正在处理的文档摘要、主题和结构化元信息。
+    input_schema:
+      type: object
+      properties: {}
+      required: []
+    read_only: true
+    success_response_schema:
+      type: object
+      properties:
+        document:
+          type: object
+    state_changes: []
+    failure_conditions:
+      - active document not found
+
+  - tool_name: transit.get_next_departure
+    description: 查询指定线路与方向的下一班车、预计等待时间和延误状态。
+    input_schema:
+      type: object
+      properties:
+        station:
+          type: string
+        line:
+          type: string
+        destination:
+          type: string
+      required:
+        - station
+        - line
+        - destination
+    read_only: true
+    success_response_schema:
+      type: object
+      properties:
+        departure:
+          type: object
+    state_changes: []
+    failure_conditions:
+      - no matching departure found
+
+  - tool_name: reservations.get_details
+    description: 查询当前预订的状态、退款规则、罚金和可替代方案。
+    input_schema:
+      type: object
+      properties:
+        reservation_id:
+          type: string
+      required:
+        - reservation_id
+    read_only: true
+    success_response_schema:
+      type: object
+      properties:
+        reservation:
+          type: object
+    state_changes: []
+    failure_conditions:
+      - reservation not found
+
+  - tool_name: reservations.cancel
+    description: 取消指定预订。
+    input_schema:
+      type: object
+      properties:
+        reservation_id:
+          type: string
+        confirmed:
+          type: boolean
+      required:
+        - reservation_id
+        - confirmed
+    read_only: false
+    success_response_schema:
+      type: object
+      properties:
+        cancelled:
+          type: boolean
+        reservation_id:
+          type: string
+    state_changes:
+      - reservations[*]
+    failure_conditions:
+      - reservation not found
+      - reservation is not cancelable
+      - confirmation missing
+
+  - tool_name: rail.search_train_options
+    description: 查询指定日期两站之间的候选列车，并返回出发时间、席别余票与票价信息。
+    input_schema:
+      type: object
+      properties:
+        origin_station:
+          type: string
+        destination_station:
+          type: string
+        travel_date:
+          type: string
+        seat_class:
+          type: string
+      required:
+        - origin_station
+        - destination_station
+        - travel_date
+    read_only: true
+    success_response_schema:
+      type: object
+      properties:
+        trains:
+          type: array
+    state_changes: []
+    failure_conditions:
+      - no train option matched the requested route
+
+  - tool_name: market.get_asset_quote
+    description: 查询指定资产在某交易场所的当前价格、短期趋势和关键技术区间。
+    input_schema:
+      type: object
+      properties:
+        symbol:
+          type: string
+        venue:
+          type: string
+        include_recent_trend:
+          type: boolean
+      required:
+        - symbol
+    read_only: true
+    success_response_schema:
+      type: object
+      properties:
+        asset:
+          type: object
+    state_changes: []
+    failure_conditions:
+      - market data unavailable
+
+  - tool_name: portfolio.get_asset_position
+    description: 查询用户当前持仓、成本价、仓位规模和风险偏好等决策上下文。
+    input_schema:
+      type: object
+      properties:
+        symbol:
+          type: string
+      required:
+        - symbol
+    read_only: true
+    success_response_schema:
+      type: object
+      properties:
+        position:
+          type: object
+    state_changes: []
+    failure_conditions:
+      - asset position not found
+
+  - tool_name: planning.get_side_project_context
+    description: 汇总用户推进副业或 side-project 时的动机、可用时间、压力和机会成本。
+    input_schema:
+      type: object
+      properties:
+        topic_hint:
+          type: string
+      required: []
+    read_only: true
+    success_response_schema:
+      type: object
+      properties:
+        context:
+          type: object
+    state_changes: []
+    failure_conditions:
+      - side project context unavailable
+
+  - tool_name: commerce.get_recent_order_status
+    description: 查询最近订单的处理状态、取消窗口、支付进度和商品明细。
+    input_schema:
+      type: object
+      properties:
+        keyword:
+          type: string
+        placed_within_days:
+          type: integer
+      required: []
+    read_only: true
+    success_response_schema:
+      type: object
+      properties:
+        order:
+          type: object
+    state_changes: []
+    failure_conditions:
+      - no matching recent order found
+
+  - tool_name: commerce.list_recent_orders
+    description: 列出近期订单候选，便于在多个相似订单中定位目标对象。
+    input_schema:
+      type: object
+      properties:
+        placed_within_days:
+          type: integer
+        keyword:
+          type: string
+      required: []
+    read_only: true
+    success_response_schema:
+      type: object
+      properties:
+        orders:
+          type: array
+    state_changes: []
+    failure_conditions:
+      - no recent orders matched the filters
+
+  - tool_name: commerce.get_order_policy
+    description: 查询订单的取消规则、退款时效、优惠回退和关联副作用。
+    input_schema:
+      type: object
+      properties:
+        order_id:
+          type: string
+      required:
+        - order_id
+    read_only: true
+    success_response_schema:
+      type: object
+      properties:
+        policy:
+          type: object
+    state_changes: []
+    failure_conditions:
+      - order policy not found
+
+  - tool_name: commerce.cancel_order
+    description: 取消指定电商订单。
+    input_schema:
+      type: object
+      properties:
+        order_id:
+          type: string
+        confirmed:
+          type: boolean
+      required:
+        - order_id
+        - confirmed
+    read_only: false
+    success_response_schema:
+      type: object
+      properties:
+        cancelled:
+          type: boolean
+        order_id:
+          type: string
+    state_changes:
+      - orders[*]
+    failure_conditions:
+      - order not found
+      - order is already processing
+      - confirmation missing
+
+  - tool_name: gaming.get_top_played_titles
+    description: 查询当前平台上最热门的游戏及其主要类型、活跃度和单局时长特征。
+    input_schema:
+      type: object
+      properties:
+        platform:
+          type: string
+        region:
+          type: string
+      required:
+        - platform
+    read_only: true
+    success_response_schema:
+      type: object
+      properties:
+        games:
+          type: array
+    state_changes: []
+    failure_conditions:
+      - popularity feed unavailable
+
+  - tool_name: time.convert_timezone
+    description: 在不同时区之间转换事件时间，并返回目标时区的本地时间与日期。
+    input_schema:
+      type: object
+      properties:
+        source_time:
+          type: string
+        source_timezone:
+          type: string
+        target_timezone:
+          type: string
+        lead_minutes:
+          type: integer
+      required:
+        - source_time
+        - source_timezone
+        - target_timezone
+    read_only: true
+    success_response_schema:
+      type: object
+      properties:
+        converted:
+          type: object
+    state_changes: []
+    failure_conditions:
+      - timezone conversion failed

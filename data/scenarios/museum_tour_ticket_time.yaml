@@ -1,0 +1,61 @@
+id: museum_tour_ticket_time
+category: implicit_reasoning
+user_prompt: 参观 30 分钟后开始，票上该写什么时间和日期？
+original_question: I need to start a guided museum tour in 30 minutes. What exact start time and date should I write on the ticket?
+tool_category: event_ticket_time_resolution
+implicit_reason: The user is not asking for arbitrary timestamp formatting, but for the authoritative start time/date that should appear on a tour ticket. The system must distinguish current time, check-in buffer, and official tour start, so the ticket is labeled correctly and does not create admission confusion.
+hidden_constraints:
+  - The written ticket time must reflect the official tour start, not the current time or check-in time.
+  - The answer must include both exact date and exact time.
+  - The user's real goal is avoiding ticketing ambiguity at admission, not doing mental arithmetic only.
+  - If venue guidance includes an earlier check-in buffer, that buffer must not replace the official printed start time.
+suggested_plan:
+  - Read the next scheduled tour-related event to recover the event name.
+  - Query the official venue details for that tour.
+  - Return the exact official start date/time that should be written on the ticket.
+max_steps: 4
+allowed_tools:
+  - device:events.get_venue_details
+  - device:schedule.get_next_event
+  - device:schedule.list_free_slots
+  - device:travel.get_trip_brief
+  - device:weather.get_forecast
+  - device:weather.check_weather
+  - device:power.get_battery_status
+  - device:power.freeze_background_apps
+  - device:power.apply_saving_plan
+  - device:profile.get_user_labels
+  - device:note.search
+  - device:note.open
+  - device:reminder.create
+  - device:alarm.create
+  - device:timer.create
+world:
+  context:
+    date: "2026-04-19"
+    local_time: "14:30"
+    city: Paris
+    scenario_source: query_top100_batch2
+    source_query_id: seed_dataset_turn_e_part2.jsonl#167
+  state:
+    calendar:
+      next_event:
+        title: Impressionist Highlights guided tour
+        start_time: "15:00"
+        location: Musee d'Orsay
+        boarding_buffer_minutes: 30
+    tool_responses:
+      events.get_venue_details:
+        venue:
+          event_name: Impressionist Highlights guided tour
+          city: Paris
+          venue_name: Musee d'Orsay
+          event_date: "2026-04-19"
+          official_start_time: "15:00"
+          recommended_check_in_time: "14:30"
+          ticket_label_policy: write the official start date and start time on paper tickets
+execution_rules:
+  - 必须返回票面应写的官方开始日期和开始时间。
+  - 不能把当前时间或建议 check-in 时间当成票面开始时间。
+  - 最终输出应消除“30 分钟后开始”带来的歧义，而不是简单重复相对时间。
+evaluation_rubric: []

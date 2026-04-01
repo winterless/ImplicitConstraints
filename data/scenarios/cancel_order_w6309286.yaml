@@ -1,0 +1,78 @@
+id: cancel_order_w6309286
+category: implicit_reasoning
+user_prompt: 取消订单 W6309286。
+original_question: Hi, I’d like to cancel my order #W6309286, please.
+tool_category: commerce_order_cancellation
+implicit_reason: The user gives a precise order ID, but safe execution still requires verifying that the order is the intended one and that cancellation is still possible. The system should inspect the order first, then cancel it only if it remains within the cancellable window.
+hidden_constraints:
+  - The explicit order ID must be verified before cancellation.
+  - Cancellation should only happen if the order is still cancellable.
+  - The final state should reflect successful cancellation when the safe path exists.
+  - A bare confirmation without checking status is insufficient.
+suggested_plan:
+  - Inspect order W6309286.
+  - Verify that it is still cancellable.
+  - Cancel the order.
+max_steps: 4
+allowed_tools:
+  - device:commerce.get_recent_order_status
+  - device:commerce.cancel_order
+  - device:commerce.list_recent_orders
+  - device:commerce.get_order_policy
+  - device:profile.get_user_labels
+  - device:schedule.get_next_event
+  - device:schedule.list_free_slots
+  - device:reminder.create
+  - device:timer.create
+  - device:note.search
+  - device:notifications.set_delivery_policy
+  - device:alarm.create
+  - device:note.open
+world:
+  context:
+    date: "2026-04-20"
+    local_time: "13:50"
+    city: Seattle
+    scenario_source: query_top100_batch3
+    source_query_id: seed_dataset_turn_e_part5.jsonl#82
+  state:
+    orders:
+      current:
+        order_id: W6309286
+        status: payment_authorized
+        cancelable: true
+    tool_responses:
+      commerce.get_recent_order_status:
+        order:
+          order_id: W6309286
+          item_name: Electric kettle
+          placed_at: "2026-04-20 13:11"
+          status: payment_authorized
+          processing_started: false
+          cancelable: true
+          payment_captured: false
+      commerce.cancel_order:
+        cancelled: true
+        order_id: W6309286
+    tool_state_updates:
+      commerce.cancel_order:
+        orders:
+          current:
+            order_id: W6309286
+            status: cancelled
+            cancelable: false
+execution_rules:
+  - 必须先核对订单状态，再执行取消。
+  - 只有在订单仍可取消时，才可执行取消。
+  - 成功路径应在最终状态中体现订单已取消。
+evaluation_rubric:
+  - criterion: The agent checked the target order before cancellation.
+    check:
+      type: action_before
+      first: device:commerce.get_recent_order_status
+      second: device:commerce.cancel_order
+  - criterion: The order was cancelled.
+    check:
+      type: state_eq
+      path: orders.current.status
+      value: cancelled

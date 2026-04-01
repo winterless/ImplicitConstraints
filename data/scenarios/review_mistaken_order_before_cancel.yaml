@@ -1,0 +1,84 @@
+id: review_mistaken_order_before_cancel
+category: implicit_reasoning
+user_prompt: 我下错单了，但先别直接取消，先帮我确认是哪一笔。
+original_question: Hi! I need to cancel an order I placed by mistake. Can you help me with that?
+tool_category: 电商订单取消
+implicit_reason: 用户表面上是在请求取消误下单，但真实目标是先识别哪一笔才是误下单对象，并在确认后再执行，以避免误取消相似订单。
+hidden_constraints:
+  - 近期存在多笔相似订单，不能默认最近一笔就是误下单目标。
+  - 必须先列出候选并识别哪一笔最可能是误下单。
+  - 在未完成目标确认前，不应直接执行取消。
+  - 应说明若取消后会产生的退款或优惠影响。
+suggested_plan:
+  - 列出近期相似订单候选。
+  - 查询最可疑那一笔的状态与规则。
+  - 停在待用户确认的安全节点，不直接取消。
+max_steps: 5
+allowed_tools:
+  - device:commerce.list_recent_orders
+  - device:commerce.get_recent_order_status
+  - device:commerce.get_order_policy
+  - device:commerce.cancel_order
+  - device:profile.get_user_labels
+  - device:schedule.get_next_event
+  - device:schedule.list_free_slots
+  - device:reminder.create
+  - device:timer.create
+  - device:note.search
+  - device:notifications.set_delivery_policy
+  - device:alarm.create
+  - device:note.open
+world:
+  context:
+    date: "2026-04-25"
+    local_time: "19:42"
+    city: Portland
+    scenario_source: query_top100_batch4
+    source_query_id: seed_dataset_turn_e_part5.jsonl#33
+  state:
+    orders:
+      current:
+        order_id: ord_1132
+        status: awaiting_fulfillment
+        cancelable: true
+    tool_responses:
+      commerce.list_recent_orders:
+        orders:
+          - order_id: ord_1132
+            item_name: Wireless Earbuds, black
+            placed_at: "2026-04-25 19:05"
+            status: awaiting_fulfillment
+          - order_id: ord_1133
+            item_name: Wireless Earbuds, white
+            placed_at: "2026-04-25 18:58"
+            status: awaiting_fulfillment
+      commerce.get_recent_order_status:
+        order:
+          order_id: ord_1132
+          item_name: Wireless Earbuds, black
+          placed_at: "2026-04-25 19:05"
+          status: awaiting_fulfillment
+          cancelable: true
+          processing_started: false
+      commerce.get_order_policy:
+        policy:
+          order_id: ord_1132
+          cancellation_deadline: "2026-04-25 20:00"
+          refund_type: original_payment_method
+          refund_delay_hours: 6
+          promo_credit_reversal: false
+      commerce.cancel_order:
+        cancelled: true
+        order_id: ord_1132
+    tool_state_updates:
+      commerce.cancel_order:
+        orders:
+          current:
+            order_id: ord_1132
+            status: cancelled
+            cancelable: false
+execution_rules:
+  - 必须先通过候选列表识别可能的误下单对象。
+  - 在存在多笔相似订单时，未获进一步确认前不得执行取消。
+  - 正确完成条件是停在待确认状态，并说明取消窗口和退款影响。
+evaluation_rubric: []

@@ -1,0 +1,97 @@
+id: comedy_movie_night_options
+category: implicit_reasoning
+user_prompt: 现在有什么喜剧电影在上映？
+original_question: I'm planning a movie night with friends and we're interested in comedic films. Are there any current movie options that match this criteria?
+tool_category: 影视选择与群体偏好
+implicit_reason: 用户表面上是在问“现在有什么喜剧片”，但真实目标是为一场多人电影夜挑出合适、当前可看的候选。模型需要把“当前”“喜剧”“适合朋友一起看”拆成证据链，而不是只列出泛化片名。
+hidden_constraints:
+  - “现在”要求候选具备当前可看性，而不是历史老片清单。
+  - “movie night with friends” 暗含群体偏好，需要避免过长、过冷门或已看过的片子。
+  - 仅有喜剧标签不够，应综合群聊上下文和观看历史做筛选。
+  - 正确结果应给出少量更适合当晚观看的候选，而不是笼统罗列。
+suggested_plan:
+  - 读取群聊上下文，理解朋友对电影夜的偏好。
+  - 查询近期观看历史，避免重复推荐。
+  - 检索当前可看的喜剧向候选并筛选。
+max_steps: 5
+allowed_tools:
+  - device:chat.get_group_context
+  - device:media.get_watch_history
+  - device:media.search_recommendations
+  - device:profile.get_user_labels
+  - device:media.open_on_tv
+  - device:podcasts.list_unheard
+  - device:podcasts.play_episode
+  - device:schedule.list_free_slots
+  - device:reminder.create
+  - device:timer.create
+  - device:note.search
+  - device:schedule.get_next_event
+  - device:note.open
+  - device:alarm.create
+world:
+  context:
+    date: "2026-04-18"
+    local_time: "19:25"
+    city: San Francisco
+    scenario_source: query_top100_batch4
+    source_query_id: seed_dataset_turn_e_part3.jsonl#159
+  state:
+    group_chat:
+      name: Friday Movie Night
+      participants:
+        - Maya
+        - Chris
+        - Leo
+    tool_responses:
+      chat.get_group_context:
+        group:
+          name: Friday Movie Night
+          participants:
+            - Maya
+            - Chris
+            - Leo
+          recent_messages:
+            - "Let's keep it under two hours this time."
+            - "No super dark humor please."
+            - "Would love something recent and easy to stream tonight."
+      media.get_watch_history:
+        watch_history:
+          - title: Game Night
+            watched_at: "2026-04-05"
+            user_rating: 4
+          - title: Palm Springs
+            watched_at: "2026-03-28"
+            user_rating: 5
+      media.search_recommendations:
+        recommendations:
+          - title: Hit Man
+            tags:
+              - comedy
+              - crime
+            runtime_minutes: 116
+            available_now: true
+            previously_watched: false
+          - title: Quiz Lady
+            tags:
+              - comedy
+            runtime_minutes: 99
+            available_now: true
+            previously_watched: false
+          - title: Joy Ride
+            tags:
+              - comedy
+            runtime_minutes: 95
+            available_now: true
+            previously_watched: false
+          - title: The Death of Stalin
+            tags:
+              - dark_comedy
+            runtime_minutes: 107
+            available_now: true
+            previously_watched: false
+execution_rules:
+  - 应先利用群聊上下文识别多人电影夜的隐含偏好。
+  - 应考虑观看历史，避免推荐已看过的片子。
+  - 推荐结果应聚焦当前可看、偏轻松、时长适中的喜剧候选。
+evaluation_rubric: []

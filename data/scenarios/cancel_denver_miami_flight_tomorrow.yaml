@@ -1,0 +1,99 @@
+id: cancel_denver_miami_flight_tomorrow
+category: implicit_reasoning
+user_prompt: 帮我把明天那班丹佛飞迈阿密的航班取消掉。
+original_question: Hi, I need to cancel my flight from Denver to Miami that's scheduled for tomorrow. Can you help me with that?
+tool_category: 航班取消与行程风险
+implicit_reason: 用户表面上是在请求取消明天的航班，但真实目标是先定位正确航班，再判断取消费用、旅行链路影响和是否仍在可操作窗口内，然后安全执行。
+hidden_constraints:
+  - 需要先在近期航班中定位丹佛到迈阿密、且出发时间为明天的那一张。
+  - 必须检查取消费用和是否仍可退。
+  - 必须结合整段出行概要判断是否存在酒店、返程或同伴行程联动。
+  - 若规则允许且无关键阻塞，应真正完成取消。
+suggested_plan:
+  - 列出近期航班候选，定位目标航班。
+  - 查询该航班状态和旅行链路影响。
+  - 若可取消且风险已知，则执行取消。
+max_steps: 5
+allowed_tools:
+  - device:booking.list_upcoming_bookings
+  - device:travel.get_trip_brief
+  - device:booking.get_booking_status
+  - device:booking.cancel_booking
+  - device:reservations.get_details
+  - device:reservations.cancel
+  - device:schedule.get_next_event
+  - device:schedule.list_free_slots
+  - device:weather.get_forecast
+  - device:reminder.create
+  - device:alarm.create
+  - device:weather.check_weather
+  - device:events.get_venue_details
+  - device:profile.get_user_labels
+  - device:note.search
+  - device:timer.create
+world:
+  context:
+    date: "2026-05-13"
+    local_time: "18:25"
+    city: Denver
+    scenario_source: query_top100_batch4
+    source_query_id: seed_dataset_turn_e_part4.jsonl#89
+  state:
+    bookings:
+      active:
+        - booking_id: flt_820
+          destination: Miami
+          departure_time: "2026-05-14 09:10"
+          status: confirmed
+        - booking_id: flt_821
+          destination: Phoenix
+          departure_time: "2026-05-20 15:40"
+          status: confirmed
+    tool_responses:
+      booking.list_upcoming_bookings:
+        bookings:
+          - booking_id: flt_820
+            booking_type: flight
+            origin: Denver
+            destination: Miami
+            departure_time: "2026-05-14 09:10"
+          - booking_id: flt_821
+            booking_type: flight
+            origin: Denver
+            destination: Phoenix
+            departure_time: "2026-05-20 15:40"
+      travel.get_trip_brief:
+        trip:
+          booking_id: flt_820
+          destination: Miami
+          return_leg_linked: false
+          hotel_linked: true
+          hotel_status: standalone_nonrefundable
+      booking.get_booking_status:
+        booking:
+          booking_id: flt_820
+          status: confirmed
+          cancelable: true
+          cancellation_fee: 75
+          refund_type: airline_credit
+          cancellation_deadline: "2026-05-14 08:00"
+      booking.cancel_booking:
+        cancelled: true
+        booking_id: flt_820
+    tool_state_updates:
+      booking.cancel_booking:
+        bookings:
+          active:
+            - booking_id: flt_820
+              destination: Miami
+              departure_time: "2026-05-14 09:10"
+              status: cancelled
+            - booking_id: flt_821
+              destination: Phoenix
+              departure_time: "2026-05-20 15:40"
+              status: confirmed
+execution_rules:
+  - 必须先定位明天那班丹佛到迈阿密的航班。
+  - 必须检查取消费用和旅行链路影响后才能执行取消。
+  - 若执行取消，应在结果中提示航班会退成 credit，且酒店不会自动取消。
+evaluation_rubric: []
