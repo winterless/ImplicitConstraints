@@ -1,6 +1,32 @@
 id: airport_route_time
 category: implicit_reasoning
 user_prompt: 帮我设置导航，确保我能准时到机场。
+sample_result:
+  tool_trace:
+    - step: 1
+      tool: device:schedule.get_next_event
+      arguments: {}
+      expected_observation: >
+        读到下一条日程是 18:00 在 SEA Airport 起飞的航班，且需要 90 分钟登机缓冲，
+        因而最晚应在 16:30 前到达机场。
+    - step: 2
+      tool: device:maps.get_routes
+      arguments:
+        destination: SEA Airport
+      expected_observation: >
+        看到 `route_short` ETA 为 42 分钟、`route_airport` ETA 为 34 分钟，
+        虽然前者距离更短，但后者更快，更有机会满足 16:30 前到达的约束。
+    - step: 3
+      tool: device:maps.start_navigation
+      arguments:
+        destination: SEA Airport
+        route_id: route_airport
+      expected_observation: >
+        导航应成功启动到 SEA Airport，预计到达时间不晚于 16:30，
+        说明该路线满足航班起飞前的登机缓冲要求。
+  final_answer: >
+    已为你选择更稳妥的 Airport freeway route 并开始导航。虽然它距离更远，但 ETA 只有 34 分钟，
+    比本地短路线更快，能在航班 18:00 起飞前预留 90 分钟登机缓冲，更适合这次去机场。
 max_steps: 6
 allowed_tools:
   - device:schedule.get_next_event

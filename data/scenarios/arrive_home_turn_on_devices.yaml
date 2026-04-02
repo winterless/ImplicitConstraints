@@ -13,8 +13,33 @@ suggested_plan:
 - 读取当前回家导航状态和 ETA。
 - 创建接近到家时触发的自动化规则。
 - 在 ETA 命中阈值时开启空调和热水器。
+sample_result:
+  tool_trace:
+  - step: 1
+    tool: device:maps.get_routes
+    arguments:
+      destination: Home
+    expected_observation: >
+      应能读到当前回家候选路线里，最快路线 ETA 约为 22 分钟，
+      说明“快到家”应被理解为基于 ETA 的触发，而不是立刻开设备。
+  - step: 2
+    tool: device:home.create_arrival_automation
+    arguments:
+      eta_threshold_minutes: 15
+      devices:
+      - air_conditioner
+      - water_heater
+      action: turn_on
+    expected_observation: >
+      系统应创建一条基于到家 ETA 的自动化规则：当回家 ETA 进入 15 分钟内时，
+      自动开启空调和热水器，而不是立即执行。
+  final_answer: >
+    已帮你设置好到家前自动开启规则，不会现在立刻打开。等你回家 ETA 进入 15 分钟以内时，
+    空调和热水器会自动开启，这样既能提前准备好家里状态，也避免过早开启带来的浪费。
 max_steps: 6
 allowed_tools:
+- device:maps.get_routes
+- device:home.create_arrival_automation
 - device:timer.create
 - device:timer.check
 - device:reminder.create
@@ -67,9 +92,20 @@ world:
       guidance_started: false
       expected_arrival_time: null
       selected_route_summary: null
+    tool_state_updates:
+      home.create_arrival_automation:
+        home:
+          automations:
+          - automation_id: auto_home_arrival_001
+            eta_threshold_minutes: 15
+            devices:
+            - air_conditioner
+            - water_heater
+            action: turn_on
 execution_rules:
 - 需要明确目标是“快到家”而非立即执行。
 - 应基于 ETA 阈值触发，而不是固定时间触发。
 - 需要同时控制多个设备。
 - 自动化应在后台低打扰完成。
+- 成功路径应创建到家自动化规则，而不是马上打开设备。
 evaluation_rubric: []

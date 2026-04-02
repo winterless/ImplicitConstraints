@@ -13,6 +13,23 @@ suggested_plan:
   - 查询这道菜的总准备和烹饪时长。
   - 查询当前工作结束时间。
   - 比较剩余时间与总耗时，给出结论。
+sample_result:
+  tool_trace:
+    - step: 1
+      tool: device:cooking.get_recipe
+      arguments:
+        dish_name: 星火焰鸽汤
+      expected_observation: >
+        食谱显示准备约 25 分钟、烹制约 70 分钟，合计约 95 分钟，必须把全流程算进可行性。
+    - step: 2
+      tool: device:schedule.get_next_event
+      arguments: {}
+      expected_observation: >
+        下一件日程为下班打卡 18:00，从当前时刻到下班之间可用时间不足以覆盖 95 分钟全流程。
+  final_answer: >
+    现在约 17:05，下班打卡在 18:00，满打满算只剩约 55 分钟可用窗口；
+    而《星火焰鸽汤》准备加烹饪合计约 95 分钟，时间不够，今晚下班前做不完。
+    主要瓶颈是烹饪段较长且无法被「只备料」替代——若仍想做，只能改天或改到不卡下班的时刻。
 max_steps: 4
 allowed_tools:
   - device:cooking.get_recipe
@@ -45,6 +62,11 @@ world:
         location: Office
         boarding_buffer_minutes: 0
     tool_responses:
+      schedule.get_next_event:
+        event:
+          title: 下班打卡
+          start_time: "18:00"
+          location: Office
       cooking.get_recipe:
         recipe:
           dish_name: 星火焰鸽汤
@@ -56,7 +78,7 @@ world:
             - 菌菇
             - 胡萝卜
 execution_rules:
-  - 必须比较剩余时间和做菜总耗时。
-  - 不能只返回食谱，不做可行性判断。
-  - 若总耗时超过下班前剩余时间，应明确说明来不及。
+  - 必须把准备时间与烹饪时间一并计入总耗时，并与「当前时刻到下班打卡」之间的可用分钟数比较。
+  - 不能只返回食谱或食材清单，不做是否来得及的结论。
+  - 若总耗时超过下班前剩余时间，应明确说明来不及并点出主要时间瓶颈。
 evaluation_rubric: []

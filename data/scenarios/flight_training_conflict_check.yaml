@@ -13,6 +13,23 @@ suggested_plan:
   - 读取飞行训练概览和调班记录。
   - 比对调班后的第二次体验与固定自学时段。
   - 补充首次体验的时长和教员信息。
+sample_result:
+  tool_trace:
+    - step: 1
+      tool: device:training.get_training_overview
+      arguments: {}
+      expected_observation: >
+        第二次体验已换到 2026-04-22 20:15，且该日期为周三晚间；
+        每周二 20:00-20:45 为固定航空英语自学；首次体验 55 分钟、教员 Coach Lin。
+    - step: 2
+      tool: device:schedule.get_next_event
+      arguments: {}
+      expected_observation: >
+        日历中应能看到周二晚间的固定自学块，与第二次体验的周三日期不在同一自然日。
+  final_answer: >
+    换班后的第二次飞行体验在 4 月 22 日（周三）20:15，而你说的航空英语自学固定在每周二晚间 20:00-20:45，
+    两者不在同一天，因此不构成直接时间冲突。
+    首次飞行体验时长约 55 分钟，教员为 Coach Lin。若仍担心疲劳，可把周三晚间其他安排一并看一眼，但就「周二课」而言不撞车。
 max_steps: 4
 allowed_tools:
   - device:training.get_training_overview
@@ -57,12 +74,20 @@ world:
           second_experience:
             original_slot: "2026-04-22 19:30"
             swapped_slot: "2026-04-22 20:15"
+            swapped_date_weekday: Wednesday
             location: North Field
           first_experience:
             duration_minutes: 55
             instructor: Coach Lin
+      schedule.get_next_event:
+        event:
+          title: 航空英语自学（固定）
+          recurrence: weekly_tuesday
+          start_time: "20:00"
+          end_time: "20:45"
+          location: Home
 execution_rules:
-  - 必须围绕调班后的第二次体验是否与周二晚自学冲突来做结论。
-  - 不能只返回调班日期而不判断冲突。
-  - 首次体验的时长和教员应作为补充信息返回。
+  - 必须把第二次体验换班后的具体日期与星期，和周二晚间固定自学块放在同一时间轴上比较，再下结论。
+  - 不能只复述调班日期而不说明是否与周二 20:00-20:45 重叠。
+  - 首次体验的时长和教员应作为补充信息返回，但不能替代主冲突判断。
 evaluation_rubric: []

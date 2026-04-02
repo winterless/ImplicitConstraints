@@ -13,6 +13,39 @@ suggested_plan:
 - 先查询溏心蛋的标准步骤和时间。
 - 生成每个关键步骤的计时器或提醒。
 - 按时间顺序串联，形成可执行流程。
+sample_result:
+  tool_trace:
+  - step: 1
+    tool: device:note.search
+    arguments:
+      query: 溏心蛋
+    expected_observation: >
+      找到简短做法：水沸后下蛋，中小火控制翻滚，约 6 分 30 秒溏心口感，捞出过冷水 1–2 分钟；
+      据此拆成多段计时而不是只设一个总时长。
+  - step: 2
+    tool: device:reminder.create
+    arguments:
+      title: 溏心蛋-水沸再下锅
+      remind_at: "2026-03-19T18:15:00"
+    expected_observation: >
+      固定“水沸后再轻放入蛋”的节点，避免冷水下锅导致后续倒计时不准。
+  - step: 3
+    tool: device:timer.create
+    arguments:
+      duration_seconds: 390
+      label: 溏心蛋-下锅煮制
+    expected_observation: >
+      创建煮蛋主倒计时（约 6 分 30 秒），对应入锅到捞出的核心窗口。
+  - step: 4
+    tool: device:timer.create
+    arguments:
+      duration_seconds: 120
+      label: 溏心蛋-过冷水
+    expected_observation: >
+      创建捞出后过冷水段，与主计时链式衔接，而不是只设一个总计时器。
+  final_answer: >
+    已按溏心蛋流程拆成链式计时：先记水沸与下锅节奏，再用约 6 分 30 秒主计时控制煮制，
+    最后用过冷水段收尾。你按顺序听提醒即可，不必盯一个总倒计时。
 max_steps: 6
 allowed_tools:
 - device:timer.create
@@ -76,9 +109,36 @@ world:
       guidance_started: false
       expected_arrival_time: null
       selected_route_summary: null
+    timers: {}
+    reminders: {}
+    tool_responses:
+      note.search:
+        notes:
+        - note_id: cook_soft_egg_01
+          title: 溏心蛋（简易）
+          body: 水沸后轻放入蛋，中小火保持微沸，约6分30秒溏心；捞出立刻过冷水1–2分钟。
+      timer.create:
+        timer_id: egg_soft_main
+        ends_at: "2026-03-19T18:16:30"
+      reminder.create:
+        reminder_id: egg_water_ready
+    tool_state_updates:
+      timer.create:
+        timers:
+          egg_soft_main:
+            label: 溏心蛋-下锅煮制
+            duration_seconds: 390
+          egg_ice_bath:
+            label: 溏心蛋-过冷水
+            duration_seconds: 120
+      reminder.create:
+        reminders:
+          egg_water_ready:
+            title: 溏心蛋-水沸再下锅
+            remind_at: "2026-03-19T18:15:00"
 execution_rules:
-- 需要把菜谱知识转成实际操作时间线。
-- 关键节点通常包含水开、入锅、捞出、过冷水等阶段。
-- 提醒最好是链式触发，而不是只设一个总计时器。
-- 输出应兼顾简单可执行，而不是罗列过多烹饪分支。
+- 需要把菜谱知识转成可执行时间线；至少应区分煮制主窗口与捞出后处理等阶段，避免只给一个总倒计时。
+- 关键节点须覆盖入锅时机与煮制时长（及常见配套的停火/冷却），并与计时或提醒一一对应。
+- 若使用多个计时器或提醒，应能按先后顺序解释用途，而不是堆叠无意义重复闹钟。
+- 输出应简单可执行；除非用户追问，否则不展开过多烹饪流派分支。
 evaluation_rubric: []

@@ -13,6 +13,32 @@ suggested_plan:
   - 查询佛罗伦萨明天下午的天气。
   - 查询当前工作室预订的取消条件。
   - 若天气适合则查找步行咖啡馆，若天气不适合则取消预订。
+sample_result:
+  tool_trace:
+    - step: 1
+      tool: device:weather.get_forecast
+      arguments:
+        location: Florence Historic Center
+        date: "2026-04-19"
+        time_range: "14:00-18:00"
+      expected_observation: >
+        明天下午拍摄窗口内为重雨、概率与降水量都很高，不适合按计划做户外人像。
+    - step: 2
+      tool: device:booking.get_booking_status
+      arguments:
+        booking_id: studio_441
+      expected_observation: >
+        工作室预订仍在确认状态，且在取消截止时间前可免费取消，取消费为 0。
+    - step: 3
+      tool: device:booking.cancel_booking
+      arguments:
+        booking_id: studio_441
+      expected_observation: >
+        预订成功取消，后续状态应变为已取消，避免继续为不适合外拍的天气付费占用档期。
+  final_answer: >
+    明天下午佛罗伦萨市中心预报为重雨，不适合按原计划做户外人像拍摄。
+    你的工作室预订在截止前可免费取消，我已走取消流程，不再继续推进「晴天找咖啡馆」分支。
+    若仍想拍，建议整体改期到气象条件更稳的半天，再重新评估户外与室内备选。
 max_steps: 6
 allowed_tools:
   - device:weather.get_forecast
@@ -95,7 +121,7 @@ execution_rules:
   - 必须先检查天气，再决定继续准备备选地点还是取消预订。
   - 若天气明显不适合户外拍摄，应优先处理取消或改期分支。
   - 取消前必须检查预订状态和取消条件。
-  - 不能在已经决定取消的情况下继续把咖啡馆搜索当作主要执行结果。
+  - 在已判定明日午后明显不适外拍时，不得把步行咖啡馆搜索当作与天气分支一致的主要结果；若走取消分支，须先完成预订状态核查再取消。
 evaluation_rubric:
   - criterion: The agent checked the weather forecast.
     check:

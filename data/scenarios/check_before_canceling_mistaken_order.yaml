@@ -13,6 +13,23 @@ suggested_plan:
   - 查询最近订单状态。
   - 判断是否仍在取消窗口内。
   - 输出可否取消及原因，停在待确认状态。
+sample_result:
+  tool_trace:
+    - step: 1
+      tool: device:commerce.list_recent_orders
+      arguments: {}
+      expected_observation: >
+        近期订单中包含 `ord_990`（standing desk mat），状态为 processing，用于定位你所说的误下单。
+    - step: 2
+      tool: device:commerce.get_recent_order_status
+      arguments:
+        order_id: ord_990
+      expected_observation: >
+        订单已进入 processing，`cancelable` 为 false，取消截止时间已过，
+        系统提示可走收货后申请退货路径。
+  final_answer: >
+    按当前系统状态，这笔误下的订单已经**不能**在发货前直接取消：处理已开始且已过取消窗口。
+    若你仍不想要，可在送达后按「收货后退货」流程处理；如需要我代为发起退货或联系客服，请再明确说一声。
 max_steps: 4
 allowed_tools:
   - device:commerce.get_recent_order_status
@@ -42,6 +59,12 @@ world:
         status: processing
         cancelable: false
     tool_responses:
+      commerce.list_recent_orders:
+        orders:
+          - order_id: ord_990
+            item_name: standing desk mat
+            placed_at: "2026-04-24 17:50"
+            status: processing
       commerce.get_recent_order_status:
         order:
           order_id: ord_990

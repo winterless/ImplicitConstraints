@@ -13,6 +13,31 @@ suggested_plan:
   - 列出近期航班候选并定位洛杉矶行程。
   - 查看该预订的取消规则和成本。
   - 在无关键冲突且允许取消时执行取消。
+sample_result:
+  tool_trace:
+    - step: 1
+      tool: device:booking.list_upcoming_bookings
+      arguments:
+        booking_type: flight
+        destination_hint: Los Angeles
+      expected_observation: >
+        列表中同时有洛杉矶 `flt_221` 与波特兰 `flt_447`，应先锁定前者为目标。
+    - step: 2
+      tool: device:booking.get_booking_status
+      arguments:
+        booking_id: flt_221
+      expected_observation: >
+        该航班 `cancelable=true`，取消费 35 美元，退款形态为航司抵用金，`linked_bookings=[]`。
+    - step: 3
+      tool: device:booking.cancel_booking
+      arguments:
+        booking_id: flt_221
+        confirmed: true
+      expected_observation: >
+        仅 `flt_221` 变为 `cancelled`，`flt_447` 仍为 `confirmed`。
+  final_answer: >
+    我已先从近期航班里锁定你要取消的洛杉矶航班 `flt_221`，确认无其它关联预订后完成取消。
+    你会收到约 35 美元取消费，其余以航司抵用金形式处理；波特兰那班未动。
 max_steps: 5
 allowed_tools:
   - device:booking.list_upcoming_bookings

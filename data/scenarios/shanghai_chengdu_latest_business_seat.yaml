@@ -13,6 +13,29 @@ suggested_plan:
   - 查询周五上海虹桥到成都东的高铁候选。
   - 排除商务座售罄或不匹配的车次。
   - 选择最晚出发且仍有商务座的一趟，并返回票价。
+sample_result:
+  tool_trace:
+  - step: 1
+    tool: device:rail.search_train_options
+    arguments:
+      origin_station: 上海虹桥
+      destination_station: 成都东
+      travel_date: "2026-04-17"
+    expected_observation: >
+      返回多趟车次，其中 G2197 更晚但商务座已售罄，不能作为答案；
+      必须在仍有商务座余票的车次中按出发时间取最晚。
+  - step: 2
+    tool: device:rail.search_train_options
+    arguments:
+      origin_station: 上海虹桥
+      destination_station: 成都东
+      travel_date: "2026-04-17"
+      seat_class: business
+    expected_observation: >
+      在商务座仍有余票的子集里，G2193（12:40 发）比 G2189 更晚，是唯一满足“周五最晚+商务有票”的候选。
+  final_answer: >
+    本周五（4 月 17 日）从上海虹桥到成都东，在仍有商务座余票的前提下，最晚可选车次为 G2193（12:40 发车，21:58 到），
+    商务座票价 2298 元。更晚的 G2197 虽发车更迟，但商务座已售罄，不能选。
 max_steps: 3
 allowed_tools:
   - device:rail.search_train_options
@@ -71,7 +94,8 @@ world:
             business_seat_available: true
             business_seat_price_cny: 2258
 execution_rules:
-  - 必须返回周五当天最晚且仍有商务座余票的车次。
-  - 不能把商务座已售罄的更晚车次当成答案。
-  - 输出必须同时包含车次和商务座票价。
+  - 查询与排序必须针对用户所说的周五及指定发到站；若情景日期与周五不一致，以自然周内的周五日期为准并写明。
+  - 必须返回周五当天、在仍有商务座余票约束下出发时间最晚的车次，不能把仅更晚但商务售罄的车次当作答案。
+  - 票价必须与最终选定车次绑定，来自商务座报价字段，不得套用其他车次票价。
+  - 输出须同时包含车次号、出发时间（或便于核验的时间信息）与商务座票价。
 evaluation_rubric: []

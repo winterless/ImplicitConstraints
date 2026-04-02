@@ -13,8 +13,31 @@ suggested_plan:
 - 估算当前通勤路线和 ETA。
 - 从未听列表中筛选时长最接近 ETA 的节目。
 - 直接播放最佳匹配集。
+sample_result:
+  tool_trace:
+    - step: 1
+      tool: device:maps.get_routes
+      arguments:
+        destination: Company HQ
+      expected_observation: >
+        到 Company HQ 的最快路线 ETA 约 22 分钟，与“覆盖通勤时长”的基准一致，需要把播客时长对齐到该量级并留少量容差。
+    - step: 2
+      tool: device:podcasts.list_unheard
+      arguments: {}
+      expected_observation: >
+        未听列表中有一集时长约 23 分钟的 Daily Brief，与 22 分钟 ETA 最接近；另有一集 58 分钟深度节目明显过长。
+    - step: 3
+      tool: device:podcasts.play_episode
+      arguments:
+        episode_id: ep_daily_402
+      expected_observation: >
+        播放成功启动，当前 episode 为未听列表中的短时长集，能在通勤结束前自然听完，减少中途切断或大量剩余时间。
+  final_answer: >
+    你到公司最快路线 ETA 约 22 分钟，我已从未听播客里选了一集约 23 分钟的节目并开始播放，时长与通勤最贴合（允许几分钟容差）。
+    若你希望严格少于一分钟误差，我可以再筛选更短的单集。
 max_steps: 6
 allowed_tools:
+- device:maps.get_routes
 - device:podcasts.list_unheard
 - device:podcasts.play_episode
 - device:media.get_watch_history
@@ -40,34 +63,43 @@ world:
   state:
     calendar:
       next_event:
-        title: Upcoming task
+        title: Team sync
         start_time: '19:30'
         location: Company HQ
-        boarding_buffer_minutes: 30
-    maps:
-      routes_by_destination:
-        Company HQ:
-        - route_id: route_fast
-          label: Fast route
-          distance_km: 18
-          eta_minutes: 22
-          traffic_level: moderate
-          tolls: false
-        - route_id: route_safe
-          label: Safer route
-          distance_km: 21
-          eta_minutes: 28
-          traffic_level: light
-          tolls: true
-    navigation:
-      active_destination: null
-      active_route_id: null
-      guidance_started: false
-      expected_arrival_time: null
-      selected_route_summary: null
+        boarding_buffer_minutes: 15
+    tool_responses:
+      maps.get_routes:
+        destination: Company HQ
+        routes:
+          - route_id: route_fast
+            label: Fast route
+            distance_km: 18
+            eta_minutes: 22
+            traffic_level: moderate
+            tolls: false
+          - route_id: route_safe
+            label: Safer route
+            distance_km: 21
+            eta_minutes: 28
+            traffic_level: light
+            tolls: true
+      podcasts.list_unheard:
+        episodes:
+          - episode_id: ep_daily_402
+            show_name: Daily Brief
+            title: Market wrap
+            duration_minutes: 23
+            unheard: true
+          - episode_id: ep_deep_881
+            show_name: Deep Dive Weekly
+            title: Longform interview
+            duration_minutes: 58
+            unheard: true
+      podcasts.play_episode:
+        playing: true
+        episode_id: ep_daily_402
 execution_rules:
-- 需要精确估算当前到公司的通勤时间。
-- 应优先选择未听过的播客。
-- 匹配规则应允许一定时长容差，而不是只接受完全相等。
-- 最终应直接开始播放，而不是只给推荐列表。
+- 必须先取得到 Company HQ 的路线 ETA，再匹配播客时长；不能把任意默认分钟数当通勤时间。
+- 应优先选择未听过的播客，并在多集中选取时长最接近 ETA 的条目（允许几分钟容差）。
+- 最终必须调用播放类工具开始播放，而不是只罗列候选。
 evaluation_rubric: []

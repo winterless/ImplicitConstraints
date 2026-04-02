@@ -13,6 +13,30 @@ suggested_plan:
   - 读取群聊上下文，理解朋友对电影夜的偏好。
   - 查询近期观看历史，避免重复推荐。
   - 检索当前可看的喜剧向候选并筛选。
+sample_result:
+  tool_trace:
+    - step: 1
+      tool: device:chat.get_group_context
+      arguments:
+        group_name: Friday Movie Night
+      expected_observation: >
+        群聊要求时长控制在约两小时内、不要过黑幽默、希望今晚就能方便流媒体观看。
+    - step: 2
+      tool: device:media.get_watch_history
+      arguments: {}
+      expected_observation: >
+        近期看过 Game Night、Palm Springs 等，与本次推荐列表需去重。
+    - step: 3
+      tool: device:media.search_recommendations
+      arguments:
+        genre: comedy
+        available_now: true
+      expected_observation: >
+        候选含 Hit Man、Quiz Lady、Joy Ride、The Death of Stalin 等；后者偏 dark comedy 与群聊偏好冲突。
+  final_answer: >
+    结合群聊「两小时以内、别太阴暗、今晚好播」的约束，并排除未看过且偏轻松的喜剧后，
+    优先推荐 **Quiz Lady**（约 99 分钟）或 **Joy Ride**（约 95 分钟），时长合适、标签为喜剧且当前可看。
+    **Hit Man** 也可作为略长一点的备选；**The Death of Stalin** 偏黑色幽默，不太符合「不要 super dark」这条，建议暂不选。
 max_steps: 5
 allowed_tools:
   - device:chat.get_group_context

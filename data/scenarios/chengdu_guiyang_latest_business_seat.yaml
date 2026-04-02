@@ -13,6 +13,25 @@ suggested_plan:
   - 查询成都东到贵阳北周六当天的高铁候选。
   - 过滤掉商务座售罄的车次。
   - 在剩余候选中选择最晚出发的一趟，并返回对应票价。
+sample_result:
+  tool_trace:
+    - step: 1
+      tool: device:rail.search_train_options
+      arguments:
+        origin_station: 成都东
+        destination_station: 贵阳北
+        travel_date: "2026-04-18"
+      expected_observation: >
+        返回多趟车次：其中 G2371 最晚出发但商务座已售罄；在仍有余票的班次中，
+        G2981（18:05 发）比 G2893（17:32 发）更晚。
+    - step: 2
+      tool: device:schedule.get_next_event
+      arguments: {}
+      expected_observation: >
+        当日无其它强制日程冲突出行时间的约束，选择最晚可订商务座车次作为答案合理。
+  final_answer: >
+    2026-04-18（周六）从成都东到贵阳北，在**商务座仍有余票**的车次里，最晚出发的是 **G2981**（18:05 开，20:41 到），
+    商务座票价 **728 元**。更晚的 G2371 虽时刻更迟，但商务座已售罄，不能作为可订答案。
 max_steps: 3
 allowed_tools:
   - device:rail.search_train_options
@@ -36,6 +55,9 @@ world:
     source_query_id: seed_dataset_turn_e_part1.jsonl#115
   state:
     tool_responses:
+      schedule.get_next_event:
+        event: null
+        message: 当日无更高优先级已占用行程
       rail.search_train_options:
         trains:
           - train_no: G2371
@@ -71,7 +93,7 @@ world:
             business_seat_available: false
             business_seat_price_cny: 714
 execution_rules:
-  - 必须在有商务座余票的候选中选出最晚出发的一趟。
+  - 必须在有商务座余票的候选中选出最晚出发的一趟；比较出发时刻时不得把商务座已售罄的车次纳入候选集。
   - 不能把绝对最晚但已售罄商务座的车次当成正确答案。
-  - 最终输出必须包含所选车次及其商务座票价。
+  - 最终输出必须包含所选车次及其商务座票价，且票价须与该车次绑定。
 evaluation_rubric: []

@@ -13,6 +13,25 @@ suggested_plan:
   - Read the next scheduled tour-related event to recover the event name.
   - Query the official venue details for that tour.
   - Return the exact official start date/time that should be written on the ticket.
+sample_result:
+  tool_trace:
+    - step: 1
+      tool: device:schedule.get_next_event
+      arguments: {}
+      expected_observation: >
+        下一条日程为「Impressionist Highlights guided tour」，地点 Musee d'Orsay，
+        系统显示开始时间为 15:00，但需要与场馆官方票面规则对齐，不能仅凭日程一行字写票。
+    - step: 2
+      tool: device:events.get_venue_details
+      arguments:
+        event_name: Impressionist Highlights guided tour
+        city: Paris
+      expected_observation: >
+        场馆信息明确 official_start_time 为 15:00、日期为 2026-04-19，
+        recommended_check_in_time 为 14:30，且票面应写官方开始日期与开始时间，而不是提前到场的 check-in 时间。
+  final_answer: >
+    票面上应写日期 2026-04-19，开始时间 15:00（官方导览开始时间）。14:30 是建议到场时间，不要把它写成票面开始时间，
+    以免入场核验时出现“票面时间与系统不一致”的歧义。
 max_steps: 4
 allowed_tools:
   - device:events.get_venue_details
@@ -45,6 +64,12 @@ world:
         location: Musee d'Orsay
         boarding_buffer_minutes: 30
     tool_responses:
+      schedule.get_next_event:
+        event:
+          title: Impressionist Highlights guided tour
+          start_time: "15:00"
+          location: Musee d'Orsay
+          notes: guided tour ticket should follow venue official start time
       events.get_venue_details:
         venue:
           event_name: Impressionist Highlights guided tour

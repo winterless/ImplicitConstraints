@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from collections import defaultdict
 import json
 from pathlib import Path
 import sys
@@ -24,18 +25,99 @@ from .world import build_world
 DEFAULT_SCENARIO_MANIFEST = "scenario_manifest.yaml"
 
 
-def _build_batch_aggregate_metrics(results: list[dict[str, Any]]) -> dict[str, Any]:
+def _strict_scenario_score(passed_count: int, total_count: int) -> float:
+    if total_count <= 0:
+        return 0.0
+    missed_count = max(total_count - passed_count, 0)
+    if missed_count == 0:
+        return 1.0
+    if missed_count == 1:
+        return 0.5
+    return 0.0
+
+
+def _load_rule_family_metadata(scenario_dir: Path) -> tuple[list[str], dict[str, list[str]]]:
+    rule_set_path = scenario_dir.parent / "rule_sets" / "implicit_rules_zh.yaml"
+    if not rule_set_path.exists():
+        return [], {}
+
+    raw = load_yaml(rule_set_path)
+    families = raw.get("rule_families", [])
+    if not isinstance(families, list):
+        return [], {}
+
+    rule_order: list[str] = []
+    scenario_rule_map: dict[str, list[str]] = defaultdict(list)
+    for item in families:
+        if not isinstance(item, dict):
+            continue
+        rule_id = str(item.get("rule_id", "")).strip()
+        if not rule_id:
+            continue
+        rule_order.append(rule_id)
+        existing_scenarios = item.get("existing_scenarios", [])
+        if not isinstance(existing_scenarios, list):
+            continue
+        for scenario_id in existing_scenarios:
+            scenario_key = str(scenario_id).strip()
+            if scenario_key and rule_id not in scenario_rule_map[scenario_key]:
+                scenario_rule_map[scenario_key].append(rule_id)
+
+    return rule_order, dict(scenario_rule_map)
+
+
+def _build_batch_aggregate_metrics(
+    results: list[dict[str, Any]],
+    *,
+    rule_order: list[str] | None = None,
+) -> dict[str, Any]:
     completed_results = [item for item in results if item.get("status") == "completed"]
     completed_scores = [
         float(item["normalized_scenario_score"])
         for item in completed_results
         if "normalized_scenario_score" in item
     ]
+    strict_scores = [
+        float(item.get("strict_scenario_score", 0.0))
+        for item in completed_results
+    ]
     passed_all_count = sum(
         1 for item in completed_results if item.get("passed_all") is True
     )
     total_count = len(results)
     completed_count = len(completed_results)
+
+    dimension_totals: dict[str, dict[str, Any]] = {}
+    ordered_rule_ids = rule_order or []
+    for rule_id in ordered_rule_ids:
+        dimension_totals[rule_id] = {
+            "earned_points": 0,
+            "total_points": 0,
+            "completed_scenarios": 0,
+        }
+    for item in completed_results:
+        passed_count = int(item.get("passed_count", 0))
+        total_points = int(item.get("total_count", 0))
+        if total_points <= 0:
+            continue
+        for rule_id in item.get("rule_ids", []):
+            bucket = dimension_totals.setdefault(
+                str(rule_id),
+                {"earned_points": 0, "total_points": 0, "completed_scenarios": 0},
+            )
+            bucket["earned_points"] += passed_count
+            bucket["total_points"] += total_points
+            bucket["completed_scenarios"] += 1
+
+    rule_dimension_scores: dict[str, Any] = {}
+    for rule_id, bucket in dimension_totals.items():
+        total_points = int(bucket["total_points"])
+        if total_points <= 0:
+            continue
+        rule_dimension_scores[rule_id] = {
+            **bucket,
+            "score": round(bucket["earned_points"] / total_points, 6),
+        }
 
     return {
         "avg_completed_score": round(
@@ -47,13 +129,130 @@ def _build_batch_aggregate_metrics(results: list[dict[str, Any]]) -> dict[str, A
         if total_count
         else None,
         "sum_completed_score": round(sum(completed_scores), 6),
+        "avg_completed_strict_score": round(
+            sum(strict_scores) / completed_count, 6
+        )
+        if completed_count
+        else None,
+        "avg_all_strict_score": round(sum(strict_scores) / total_count, 6)
+        if total_count
+        else None,
+        "sum_completed_strict_score": round(sum(strict_scores), 6),
         "passed_all_count": passed_all_count,
         "passed_all_rate_completed": round(
             passed_all_count / completed_count, 6
         )
         if completed_count
         else None,
+        "rule_dimension_scores": rule_dimension_scores,
     }
+
+
+def _load_existing_batch_summary(summary_path: Path) -> dict[str, Any]:
+    if not summary_path.exists():
+        raise SystemExit(f"Batch summary not found: {summary_path}")
+    try:
+        raw = json.loads(summary_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"Invalid batch summary JSON: {summary_path}: {exc}") from exc
+    if not isinstance(raw, dict):
+        raise SystemExit(f"Batch summary must be a JSON object: {summary_path}")
+    if raw.get("mode") != "batch":
+        raise SystemExit(f"Expected a batch summary file: {summary_path}")
+    results = raw.get("results", [])
+    if not isinstance(results, list):
+        raise SystemExit(f"Batch summary results must be a list: {summary_path}")
+    return raw
+
+
+def _summary_entry_for_result(
+    *,
+    result: dict[str, Any],
+    scenario_path: Path,
+    output_path: Path,
+    scenario_rule_map: dict[str, list[str]],
+) -> dict[str, Any]:
+    rule_ids = scenario_rule_map.get(result["scenario_id"], [])
+    if result["status"] == "completed":
+        eval_summary = result["evaluation"]["summary"]
+        passed_count = int(eval_summary.get("passed_count", 0))
+        total_points = int(eval_summary.get("total_count", 0))
+        strict_score = _strict_scenario_score(passed_count, total_points)
+        return {
+            "scenario_path": str(scenario_path),
+            "scenario_id": result["scenario_id"],
+            "status": "completed",
+            "output_path": str(output_path),
+            "rule_ids": rule_ids,
+            "normalized_scenario_score": eval_summary["normalized_scenario_score"],
+            "strict_scenario_score": strict_score,
+            "passed_all": eval_summary["passed_all"],
+            "passed_count": passed_count,
+            "total_count": total_points,
+        }
+    return {
+        "scenario_path": str(scenario_path),
+        "scenario_id": result["scenario_id"],
+        "status": "failed",
+        "output_path": str(output_path),
+        "rule_ids": rule_ids,
+        "error": result.get("error", "Unknown error"),
+    }
+
+
+def _build_batch_summary(
+    *,
+    results: list[dict[str, Any]],
+    scenario_dir: str,
+    scenario_manifest: str | None,
+    batch_output_dir: Path,
+    rule_order: list[str],
+) -> dict[str, Any]:
+    completed_count = sum(1 for item in results if item.get("status") == "completed")
+    failed_count = sum(1 for item in results if item.get("status") == "failed")
+    summary: dict[str, Any] = {
+        "mode": "batch",
+        "scenario_dir": scenario_dir,
+        "scenario_manifest": scenario_manifest,
+        "output_dir": str(batch_output_dir),
+        "total_scenarios": len(results),
+        "completed_scenarios": completed_count,
+        "failed_scenarios": failed_count,
+        "results": results,
+    }
+    summary.update(_build_batch_aggregate_metrics(results, rule_order=rule_order))
+    return summary
+
+
+def _failed_scenarios_from_summary(
+    summary: dict[str, Any],
+    *,
+    error_filters: list[str],
+) -> list[tuple[str, Path]]:
+    selected: list[tuple[str, Path]] = []
+    seen_ids: set[str] = set()
+    for item in summary.get("results", []):
+        if not isinstance(item, dict) or item.get("status") != "failed":
+            continue
+        scenario_id = str(item.get("scenario_id", "")).strip()
+        if not scenario_id or scenario_id in seen_ids:
+            continue
+        error = str(item.get("error", ""))
+        if error_filters and not any(fragment in error for fragment in error_filters):
+            continue
+        raw_path = str(item.get("scenario_path", "")).strip()
+        if not raw_path:
+            raise SystemExit(
+                f"Failed summary entry is missing scenario_path: {scenario_id}"
+            )
+        scenario_path = Path(raw_path)
+        if not scenario_path.is_absolute():
+            scenario_path = (Path.cwd() / scenario_path).resolve()
+        if not scenario_path.exists():
+            raise SystemExit(f"Scenario from summary does not exist: {scenario_path}")
+        selected.append((scenario_id, scenario_path))
+        seen_ids.add(scenario_id)
+    return selected
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -146,11 +345,29 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Allow all LLM roles to run without an API key, useful for local compatible endpoints.",
     )
+    parser.add_argument(
+        "--rerun-from-summary",
+        help=(
+            "Optional existing batch _summary.json path. When set, rerun failed scenarios "
+            "from that summary, overwrite their artifacts, and rebuild the summary."
+        ),
+    )
+    parser.add_argument(
+        "--rerun-error-contains",
+        action="append",
+        default=[],
+        help=(
+            "Optional substring filter for --rerun-from-summary. Repeatable. "
+            "Only failed scenarios whose error contains one of these substrings will be rerun."
+        ),
+    )
     return parser
 
 
 def main() -> None:
     args = build_parser().parse_args()
+    if args.scenario and args.rerun_from_summary:
+        raise SystemExit("--scenario cannot be combined with --rerun-from-summary")
 
     registry = ToolRegistry.from_directory(args.tool_dir)
     runtime_config = override_runtime_config(
@@ -193,6 +410,92 @@ def main() -> None:
 
     scenario_dir = Path(args.scenario_dir)
     manifest_path = _resolve_scenario_manifest_path(scenario_dir, args.scenario_manifest)
+    rule_order, scenario_rule_map = _load_rule_family_metadata(scenario_dir)
+    if args.rerun_from_summary:
+        source_summary_path = Path(args.rerun_from_summary)
+        source_summary = _load_existing_batch_summary(source_summary_path)
+        rerun_targets = _failed_scenarios_from_summary(
+            source_summary,
+            error_filters=args.rerun_error_contains,
+        )
+        if not rerun_targets:
+            raise SystemExit(
+                f"No failed scenarios matched in summary: {source_summary_path}"
+            )
+
+        batch_output_dir = (
+            _batch_output_dir(args.output)
+            if args.output
+            else source_summary_path.parent
+        )
+        batch_output_dir.mkdir(parents=True, exist_ok=True)
+
+        existing_results = source_summary.get("results", [])
+        results_by_id: dict[str, dict[str, Any]] = {}
+        ordered_scenario_ids: list[str] = []
+        for item in existing_results:
+            if not isinstance(item, dict):
+                continue
+            scenario_id = str(item.get("scenario_id", "")).strip()
+            if not scenario_id or scenario_id in results_by_id:
+                continue
+            results_by_id[scenario_id] = item
+            ordered_scenario_ids.append(scenario_id)
+
+        print(
+            f"[resume] rerunning {len(rerun_targets)} failed scenarios from {source_summary_path}",
+            file=sys.stderr,
+        )
+        for _, scenario_path in rerun_targets:
+            result = _execute_scenario(
+                scenario_path=scenario_path,
+                registry=registry,
+                agent=agent,
+                world_mode=runtime_config.world.mode,
+                world_client=world_client,
+                evaluator=evaluator,
+                runtime_config=runtime_config,
+            )
+            output_path = batch_output_dir / f"{result['scenario_id']}.json"
+            _write_json(output_path, result)
+            results_by_id[result["scenario_id"]] = _summary_entry_for_result(
+                result=result,
+                scenario_path=scenario_path,
+                output_path=output_path,
+                scenario_rule_map=scenario_rule_map,
+            )
+            if result["status"] == "completed":
+                print(
+                    f"[completed] {result['scenario_id']} -> {output_path}",
+                    file=sys.stderr,
+                )
+            else:
+                print(
+                    f"[failed] {result['scenario_id']} -> {output_path}: {result.get('error', 'Unknown error')}",
+                    file=sys.stderr,
+                )
+
+        merged_results = [
+            results_by_id[scenario_id]
+            for scenario_id in ordered_scenario_ids
+            if scenario_id in results_by_id
+        ]
+        summary = _build_batch_summary(
+            results=merged_results,
+            scenario_dir=str(source_summary.get("scenario_dir", args.scenario_dir)),
+            scenario_manifest=(
+                str(source_summary["scenario_manifest"])
+                if source_summary.get("scenario_manifest") is not None
+                else None
+            ),
+            batch_output_dir=batch_output_dir,
+            rule_order=rule_order,
+        )
+        summary_path = batch_output_dir / "_summary.json"
+        _write_json(summary_path, summary)
+        print(json.dumps(summary, ensure_ascii=False, indent=2))
+        return
+
     scenario_paths = _discover_executable_scenarios(scenario_dir, manifest_path=manifest_path)
     if not scenario_paths:
         raise SystemExit(f"No executable scenarios found in: {args.scenario_dir}")
@@ -200,16 +503,7 @@ def main() -> None:
     batch_output_dir = _batch_output_dir(args.output)
     batch_output_dir.mkdir(parents=True, exist_ok=True)
 
-    summary: dict[str, Any] = {
-        "mode": "batch",
-        "scenario_dir": str(scenario_dir),
-        "scenario_manifest": str(manifest_path) if manifest_path is not None else None,
-        "output_dir": str(batch_output_dir),
-        "total_scenarios": len(scenario_paths),
-        "completed_scenarios": 0,
-        "failed_scenarios": 0,
-        "results": [],
-    }
+    summary_results: list[dict[str, Any]] = []
 
     for scenario_path in scenario_paths:
         result = _execute_scenario(
@@ -223,41 +517,32 @@ def main() -> None:
         )
         output_path = batch_output_dir / f"{result['scenario_id']}.json"
         _write_json(output_path, result)
-        if result["status"] == "completed":
-            summary["completed_scenarios"] += 1
-            summary["results"].append(
-                {
-                    "scenario_path": str(scenario_path),
-                    "scenario_id": result["scenario_id"],
-                    "status": "completed",
-                    "output_path": str(output_path),
-                    "normalized_scenario_score": result["evaluation"]["summary"][
-                        "normalized_scenario_score"
-                    ],
-                    "passed_all": result["evaluation"]["summary"]["passed_all"],
-                }
+        summary_results.append(
+            _summary_entry_for_result(
+                result=result,
+                scenario_path=scenario_path,
+                output_path=output_path,
+                scenario_rule_map=scenario_rule_map,
             )
+        )
+        if result["status"] == "completed":
             print(
                 f"[completed] {result['scenario_id']} -> {output_path}",
                 file=sys.stderr,
             )
         else:
-            summary["failed_scenarios"] += 1
-            summary["results"].append(
-                {
-                    "scenario_path": str(scenario_path),
-                    "scenario_id": result["scenario_id"],
-                    "status": "failed",
-                    "output_path": str(output_path),
-                    "error": result.get("error", "Unknown error"),
-                }
-            )
             print(
                 f"[failed] {result['scenario_id']} -> {output_path}: {result.get('error', 'Unknown error')}",
                 file=sys.stderr,
             )
 
-    summary.update(_build_batch_aggregate_metrics(summary["results"]))
+    summary = _build_batch_summary(
+        results=summary_results,
+        scenario_dir=str(scenario_dir),
+        scenario_manifest=str(manifest_path) if manifest_path is not None else None,
+        batch_output_dir=batch_output_dir,
+        rule_order=rule_order,
+    )
     summary_path = batch_output_dir / "_summary.json"
     _write_json(summary_path, summary)
     print(json.dumps(summary, ensure_ascii=False, indent=2))

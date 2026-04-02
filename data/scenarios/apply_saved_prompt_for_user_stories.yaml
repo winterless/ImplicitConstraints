@@ -13,6 +13,37 @@ suggested_plan:
   - 检查账号登录状态。
   - 读取已存提示词和当前文档概览。
   - 选择最匹配的提示词并执行应用。
+sample_result:
+  tool_trace:
+    - step: 1
+      tool: device:account.get_login_status
+      arguments: {}
+      expected_observation: >
+        返回 AI咖 账号已登录、session 仍然有效且具备写权限，
+        说明后续可以安全读取并应用已存提示词。
+    - step: 2
+      tool: device:prompts.list_saved
+      arguments: {}
+      expected_observation: >
+        看到多条“产品经理需求分析”相关提示词，其中 `p_2`
+        明确适用于“将复杂需求文档拆解为用户故事”。
+    - step: 3
+      tool: device:documents.get_active_document
+      arguments: {}
+      expected_observation: >
+        当前活动文档 `doc_882` 的主题是“会员体系改版”，目标输出正是“用户故事”，
+        与 `p_2` 的用途高度匹配。
+    - step: 4
+      tool: device:prompts.apply_saved
+      arguments:
+        prompt_id: p_2
+        document_id: doc_882
+      expected_observation: >
+        应生成 `latest_user_stories`，状态为 `generated`，
+        表明系统确实完成了用户故事拆解而不只是选出提示词。
+  final_answer: >
+    已确认 AI咖 账号可用，并选中了最匹配当前需求文档的“产品经理需求分析-用户故事版”提示词。
+    该提示词已经应用到文档 `doc_882`，用户故事结果已生成，可继续查看或导出。
 max_steps: 6
 allowed_tools:
   - device:account.get_login_status

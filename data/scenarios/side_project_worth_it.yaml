@@ -13,6 +13,23 @@ suggested_plan:
   - Read the user's side-project context.
   - Compare motivation and potential benefit against current workload and energy.
   - Return a recommendation with trade-off reasons.
+sample_result:
+  tool_trace:
+  - step: 1
+    tool: device:planning.get_side_project_context
+    arguments: {}
+    expected_observation: >
+      动机包含技能成长与作品集信号，但当前工作负荷高、精力低、平均睡眠不足，
+      且临近产品上线与家事，burnout 风险升高，不适合立刻全力开新项目。
+  - step: 2
+    tool: device:schedule.get_next_event
+    arguments: {}
+    expected_observation: >
+      近期日历显示关键里程碑密集，与副业抢同一注意力池，进一步支持“先降载或推迟”而非立刻 all-in。
+  final_answer: >
+    综合动机与成本，现在立刻开这个副业并不划算：你已有明确收益动机，但当前工作负荷高、睡眠偏少、疲劳与倦怠风险偏高，
+    且临近上线与家庭安排。更值得的做法是把范围缩到“每周固定几小时的试做里程碑”（例如只做最小原型与一页说明），
+    或把正式启动放到上线与家事告一段落之后；不建议在现阶段承诺完整产品化节奏。
 max_steps: 3
 allowed_tools:
   - device:planning.get_side_project_context
@@ -38,6 +55,12 @@ world:
     scenario_source: query_top100_batch2
     source_query_id: seed_dataset_turn_e_part3.jsonl#180
   state:
+    calendar:
+      next_event:
+        title: Day-job launch checkpoint
+        start_time: "2026-04-22T09:00:00"
+        location: Office
+        boarding_buffer_minutes: 0
     tool_responses:
       planning.get_side_project_context:
         context:
@@ -56,8 +79,13 @@ world:
           expected_benefits:
             - stronger portfolio
             - practice shipping small products
+      schedule.get_next_event:
+        event:
+          title: Day-job launch checkpoint
+          start_time: "2026-04-22T09:00:00"
+          location: Office
 execution_rules:
-  - 必须综合动机、可用时间和疲劳风险来做判断。
-  - 不能只给泛泛鼓励或否定，而要说明主要取舍。
-  - 如果当前负担过重，应允许给出“缩小范围试做”或“稍后开始”的建议。
+  - 必须结合工具可读到的动机、可用时间、精力/睡眠与倦怠风险，与近期日程约束一起做判断，不得只谈理想收益。
+  - 不能只给泛泛鼓励或否定，须说明主要取舍与可执行替代路径（缩小试做、推迟、分阶段等）。
+  - 若上下文显示负担过重或风险升高，应优先给出“缩小范围试做”或“稍后开始”等合理折中，而非默认全力开干。
 evaluation_rubric: []

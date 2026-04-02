@@ -13,6 +13,31 @@ suggested_plan:
   - 查询用户标签，理解家庭共看场景。
   - 检查近期观影记录，排除重复。
   - 从候选中筛出时长和内容都合适的作品。
+sample_result:
+  tool_trace:
+    - step: 1
+      tool: device:profile.get_user_labels
+      arguments: {}
+      expected_observation: >
+        标签显示家庭模式、低龄儿童在场、偏好较短片长，推荐应偏 G 级、轻松向动画。
+    - step: 2
+      tool: device:media.get_watch_history
+      arguments: {}
+      expected_observation: >
+        近期已看过《Luca》《The Peanuts Movie》，新推荐应避免无意义重复。
+    - step: 3
+      tool: device:media.search_recommendations
+      arguments:
+        tags:
+          - animation
+          - family
+        max_runtime_minutes: 90
+      expected_observation: >
+        候选中含多部 90 分钟以内动画；其中《Moana》时长超过 90 分钟，应被硬约束剔除。
+  final_answer: >
+    在「90 分钟以内 + 全家向动画」的硬约束下，可优先选《小熊维尼历险记》《变身国王》《玩具总动员》三部：
+    时长分别约 74、78、81 分钟，分级偏 G、氛围适合家庭共看。
+    《海洋奇缘》虽热门但超过 90 分钟，不建议纳入本轮候选。
 max_steps: 5
 allowed_tools:
   - device:profile.get_user_labels

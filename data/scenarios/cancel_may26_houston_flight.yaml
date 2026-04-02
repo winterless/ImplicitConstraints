@@ -13,6 +13,33 @@ suggested_plan:
   - 列出近期航班并用 Houston + May 26 锁定目标。
   - 查看目标航班的取消状态与费用。
   - 在允许取消时执行取消。
+sample_result:
+  tool_trace:
+    - step: 1
+      tool: device:booking.list_upcoming_bookings
+      arguments:
+        booking_type: flight
+        destination_hint: Houston
+        date_hint: "2026-05-26"
+      expected_observation: >
+        列表里会同时看到两张去 Houston 的航班，但只有 `flt_703`
+        的出发时间是 2026-05-26 13:15，因此它才是要取消的目标。
+    - step: 2
+      tool: device:booking.get_booking_status
+      arguments:
+        booking_id: flt_703
+      expected_observation: >
+        目标航班仍可取消，取消费为 20，退款形式为 airline credit，
+        截止时间是 2026-05-25 23:59。
+    - step: 3
+      tool: device:booking.cancel_booking
+      arguments:
+        booking_id: flt_703
+      expected_observation: >
+        航班 `flt_703` 被成功取消，状态更新为 `cancelled`。
+  final_answer: >
+    已帮你取消 5 月 26 日飞 Houston 的那班航班，也就是 `flt_703`。
+    这次取消会产生 20 的费用，退款形式是 airline credit，不是原路退回。
 max_steps: 5
 allowed_tools:
   - device:booking.list_upcoming_bookings
@@ -86,5 +113,5 @@ world:
 execution_rules:
   - 必须结合日期和目的地定位正确航班。
   - 必须先查看取消规则，再执行取消。
-  - 在规则允许时应完成取消，并反映取消成本。
+  - 在规则允许时应完成取消，并在结果中明确说明费用或退款形式。
 evaluation_rubric: []

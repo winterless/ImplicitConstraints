@@ -13,6 +13,24 @@ suggested_plan:
   - 查询该旅行预订详情。
   - 判断取消资格、罚金和替代路径。
   - 在仍可取消时执行取消。
+sample_result:
+  tool_trace:
+    - step: 1
+      tool: device:reservations.get_details
+      arguments:
+        reservation_id: trip_420
+      expected_observation: >
+        应读到 Orlando 行程预订 `trip_420` 当前仍可取消，
+        截止时间是 2026-06-03 12:00，罚金 45，退款形式为 travel credit。
+    - step: 2
+      tool: device:reservations.cancel
+      arguments:
+        reservation_id: trip_420
+      expected_observation: >
+        预订被成功取消，状态更新为 `cancelled`。
+  final_answer: >
+    已帮你取消 Orlando 行程预订 `trip_420`。这次取消会产生 45 的罚金，
+    退款形式是 travel credit，不是现金原路退回。
 max_steps: 4
 allowed_tools:
   - device:reservations.get_details
@@ -72,5 +90,5 @@ world:
 execution_rules:
   - 必须先查询预订详情，再决定是否取消。
   - 在预订仍可取消时，应执行取消。
-  - 结果应体现罚金或退款方式。
+  - 结果应体现罚金或退款方式，不能只给“已取消”的空结论。
 evaluation_rubric: []

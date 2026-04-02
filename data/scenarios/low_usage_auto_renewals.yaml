@@ -13,6 +13,37 @@ suggested_plan:
 - 收集本月自动续费项目和扣款时间。
 - 读取对应应用或服务的近期活跃度。
 - 输出低活跃订阅列表，并附上各自退订链接或入口。
+sample_result:
+  tool_trace:
+    - step: 1
+      tool: device:billing.scan_subscription_charges
+      arguments:
+        start_date: "2026-03-01"
+        end_date: "2026-03-31"
+      expected_observation: >
+        扫描到本月至少两笔自动续费：`sub_stream`（StreamPlus）与 `sub_fit`（FitCoach Pro），
+        均标记为 auto_renew，并带有近期扣款日期。
+    - step: 2
+      tool: device:usage.get_app_activity
+      arguments:
+        app_ids:
+          - com.streamplus
+          - com.fitcoach
+        days: 30
+      expected_observation: >
+        StreamPlus 近 30 天仅约 12 分钟、打开 3 次，属于明显低活跃；FitCoach Pro 使用时长与打开次数高得多，
+        与“没怎么用”不匹配。
+    - step: 3
+      tool: device:subscriptions.get_cancellation_options
+      arguments:
+        subscription_ids:
+          - sub_stream
+      expected_observation: >
+        返回 App Store 订阅管理入口与分步退订说明，仅针对低活跃的 StreamPlus，
+        未对仍在高频使用的 FitCoach 给出退订执行建议。
+  final_answer: >
+    本月自动续费里更符合“没怎么用”的是 StreamPlus（近 30 天使用极低）。我已整理其退订入口（前往系统订阅管理页按步骤关闭自动续订），
+    未替你直接退订。FitCoach Pro 使用很活跃，不建议当作低活跃项处理；若你其实想取消的是别的服务，请告诉我名称我再核对。
 max_steps: 6
 allowed_tools:
 - device:billing.scan_subscription_charges
@@ -35,39 +66,42 @@ world:
     date: '2026-03-19'
     local_time: '18:10'
     city: Seattle
-    destination_hint: Downtown Office
     scenario_source: mobile_implicit_cases_zh
   state:
-    calendar:
-      next_event:
-        title: Upcoming task
-        start_time: '19:30'
-        location: Downtown Office
-        boarding_buffer_minutes: 30
-    maps:
-      routes_by_destination:
-        Downtown Office:
-        - route_id: route_fast
-          label: Fast route
-          distance_km: 18
-          eta_minutes: 22
-          traffic_level: moderate
-          tolls: false
-        - route_id: route_safe
-          label: Safer route
-          distance_km: 21
-          eta_minutes: 28
-          traffic_level: light
-          tolls: true
-    navigation:
-      active_destination: null
-      active_route_id: null
-      guidance_started: false
-      expected_arrival_time: null
-      selected_route_summary: null
+    tool_responses:
+      billing.scan_subscription_charges:
+        subscriptions:
+          - subscription_id: sub_stream
+            name: StreamPlus
+            amount_usd: 9.99
+            renewal_date: "2026-03-28"
+            auto_renew: true
+            billing_channel: card_on_file
+          - subscription_id: sub_fit
+            name: FitCoach Pro
+            amount_usd: 12.99
+            renewal_date: "2026-03-25"
+            auto_renew: true
+            billing_channel: card_on_file
+      usage.get_app_activity:
+        activities:
+          - app_id: com.streamplus
+            minutes_last_30d: 12
+            opens_last_30d: 3
+          - app_id: com.fitcoach
+            minutes_last_30d: 420
+            opens_last_30d: 28
+      subscriptions.get_cancellation_options:
+        options:
+          - subscription_id: sub_stream
+            platform: App Store
+            cancel_url: https://apps.apple.com/account/subscriptions
+            steps:
+              - 打开 设置 > Apple ID > 订阅
+              - 选择 StreamPlus 并关闭自动续订
 execution_rules:
 - 自动续费候选应来自账单、短信或系统订阅记录。
-- “没怎么用”需要结合近一段时间的 App 活跃度。
-- 默认应先展示可退订列表，而不是无确认批量退订。
-- 不同订阅渠道可能对应不同的退订入口。
+- “没怎么用”必须结合近一段时间 App 活跃度判断，不能把高活跃订阅当作低活跃。
+- 默认只展示候选与退订入口说明，不得无确认代用户完成退订。
+- 不同订阅渠道可能对应不同的退订入口，应逐条匹配而非混用。
 evaluation_rubric: []

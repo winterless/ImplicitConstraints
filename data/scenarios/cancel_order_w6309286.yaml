@@ -13,6 +13,25 @@ suggested_plan:
   - Inspect order W6309286.
   - Verify that it is still cancellable.
   - Cancel the order.
+sample_result:
+  tool_trace:
+    - step: 1
+      tool: device:commerce.get_recent_order_status
+      arguments:
+        keyword: W6309286
+      expected_observation: >
+        返回的订单应明确是 `W6309286`，当前状态为 `payment_authorized`，
+        `processing_started=false` 且 `cancelable=true`，说明用户给出的 ID 与可取消状态都核对通过。
+    - step: 2
+      tool: device:commerce.cancel_order
+      arguments:
+        order_id: W6309286
+        confirmed: true
+      expected_observation: >
+        订单成功取消，最终状态更新为 `cancelled`。
+  final_answer: >
+    已帮你取消订单 `W6309286`。我先核对了订单号和当前状态，
+    确认它还没进入处理阶段且仍可取消，所以这次撤销已经成功完成。
 max_steps: 4
 allowed_tools:
   - device:commerce.get_recent_order_status
@@ -63,6 +82,7 @@ world:
             cancelable: false
 execution_rules:
   - 必须先核对订单状态，再执行取消。
+  - 必须在读到的订单信息里确认目标 ID 确实是 `W6309286`，不能凭用户文本直接盲取消。
   - 只有在订单仍可取消时，才可执行取消。
   - 成功路径应在最终状态中体现订单已取消。
 evaluation_rubric:

@@ -13,6 +13,29 @@ suggested_plan:
   - Check the Denver forecast for the wedding time window.
   - Assess whether rain risk is significant enough to threaten the event.
   - Return a clear recommendation tied to wedding impact.
+sample_result:
+  tool_trace:
+    - step: 1
+      tool: device:weather.get_forecast
+      arguments:
+        location: Denver
+        date: "2026-04-20"
+        time_range: "14:00-18:00"
+      expected_observation: >
+        预报显示婚礼窗口内为持续降雨，降雨概率高、预计降水量明显，
+        且起止时间与户外仪式高度重叠，属于足以颠覆户外布置的风险。
+    - step: 2
+      tool: device:reminder.create
+      arguments:
+        title: 户外婚礼雨天备选方案确认
+        remind_at: "2026-04-20 12:00"
+        note: 与场地确认改室内或延期，并通知宾客
+      expected_observation: >
+        提醒已创建，便于在仪式前留出与场地和宾客沟通的缓冲时间。
+  final_answer: >
+    今天下午 2 点到 6 点丹佛户外婚礼窗口内大概率会下持续性的雨，而且强度足以让户外仪式难以按计划进行。
+    建议你按“高风险雨天”处理：优先考虑改室内、搭建可靠雨棚或整体改期，而不是赌短时阵雨。
+    我已帮你设一个中午前的提醒，方便你留出与场地和宾客同步调整的时间。
 max_steps: 3
 allowed_tools:
   - device:weather.get_forecast
@@ -49,8 +72,11 @@ world:
           expected_precip_mm: 6.2
           onset_time: "14:20"
           clearance_time: "18:30"
+      reminder.create:
+        reminder_id: wedding_rain_backup_chk
+        created: true
 execution_rules:
-  - 必须根据婚礼时段内的实际降雨情况做判断，而不是泛化为“今天可能有雨”。
-  - 最终输出应服务于取消或备选决策，而不是只回报天气。
-  - 如果主要活动窗口内持续降雨，应给出明显的谨慎结论。
+  - 必须把判断锚定在下午 2-6 点的婚礼窗口内，区分短时阵雨与持续降雨，不得用全天笼统概括替代。
+  - 最终输出应能直接支撑是否改室内、延期或执行备选方案，而不是只复述预报数值。
+  - 若窗口内为持续明显降雨，应给出偏谨慎、可执行的婚礼层面的结论。
 evaluation_rubric: []

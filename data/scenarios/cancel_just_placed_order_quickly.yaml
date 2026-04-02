@@ -13,6 +13,26 @@ suggested_plan:
   - 查询刚下单订单的当前状态。
   - 判断是否仍处于可取消窗口。
   - 若可取消则立即执行。
+sample_result:
+  tool_trace:
+    - step: 1
+      tool: device:commerce.get_recent_order_status
+      arguments:
+        placed_within_days: 1
+      expected_observation: >
+        应读到最近订单是 `ord_804`，13:58 下单，当前仍为 `awaiting_fulfillment`，
+        `processing_started=false`，且取消截止时间是 14:15，说明仍在可撤回窗口内。
+    - step: 2
+      tool: device:commerce.cancel_order
+      arguments:
+        order_id: ord_804
+        confirmed: true
+      expected_observation: >
+        订单应被成功取消，且最终状态更新为 `cancelled`，
+        说明系统没有停留在解释层，而是抓住短时间窗口完成撤回。
+  final_answer: >
+    已帮你把刚下的订单 `ord_804` 取消掉了。它原本还在履约前的可取消窗口内，
+    所以我直接完成了撤回；现在订单状态应已变成已取消。
 max_steps: 4
 allowed_tools:
   - device:commerce.get_recent_order_status
@@ -64,5 +84,6 @@ world:
 execution_rules:
   - 必须先检查订单状态和取消窗口，再执行取消。
   - 当订单仍在窗口内时，应完成取消。
+  - 不应只返回“可以取消”的建议，成功路径必须真正触发取消。
   - 最终状态应体现订单已取消。
 evaluation_rubric: []

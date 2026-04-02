@@ -13,6 +13,35 @@ suggested_plan:
   - 查询该时间窗口的精确天气。
   - 查看同日是否还有更合适的空闲时段。
   - 若需要调整或备雨，创建一个可执行提醒。
+sample_result:
+  tool_trace:
+    - step: 1
+      tool: device:weather.get_forecast
+      arguments:
+        location: Chicago
+        date: "2026-05-11"
+        time_range: "14:00-17:00"
+      expected_observation: >
+        下周一下午 2–5 点为 scattered_showers，降雨概率约 65%，野餐可行性标记为 low。
+    - step: 2
+      tool: device:schedule.list_free_slots
+      arguments:
+        date: "2026-05-11"
+        location: Chicago
+      expected_observation: >
+        同日傍晚 17:30–19:30 仍有空档，可作为改期野餐的备选窗口。
+    - step: 3
+      tool: device:reminder.create
+      arguments:
+        title: 把芝加哥野餐改到傍晚并准备轻便雨具
+        remind_at: "2026-05-11 16:30"
+        note: 原 14:00-17:00 有阵雨风险，改到 17:30 后更稳妥
+      expected_observation: >
+        提醒已创建 `picnic_shift_551`，与状态中 `reminders.picnic_shift_551` 的标题与备注一致。
+  final_answer: >
+    下周一下午 2 点到 5 点在芝加哥**不太适合**野餐：该窗口有分散阵雨、降雨概率偏高，整体偏湿冷。
+    若仍想同一天户外聚餐，更稳妥的是把时段挪到**傍晚 17:30 之后**（同日你有一段空档），并随身携带轻便雨具；
+    我已设好提醒，避免临时忘记改期。
 max_steps: 5
 allowed_tools:
   - device:weather.get_forecast

@@ -13,6 +13,41 @@ suggested_plan:
   - 列出近期相关订单，定位运动相机订单。
   - 查询该订单当前状态和取消规则。
   - 若可取消且风险可接受，则执行取消。
+sample_result:
+  tool_trace:
+    - step: 1
+      tool: device:commerce.list_recent_orders
+      arguments:
+        placed_within_days: 1
+        keyword: Action Camera
+      expected_observation: >
+        近期订单里应能准确定位到 `ord_1101` 这笔 Action Camera 订单，
+        与其他非目标商品区分开。
+    - step: 2
+      tool: device:commerce.get_recent_order_status
+      arguments:
+        keyword: Action Camera
+      expected_observation: >
+        该订单当前是 `pending_review`，`processing_started=false`，
+        `shipping_label_created=false`，说明还未进入发货流程。
+    - step: 3
+      tool: device:commerce.get_order_policy
+      arguments:
+        order_id: ord_1101
+      expected_observation: >
+        取消 deadline 是 14:00，退款原路返回但预计 8 小时到账，
+        同时会回收与存储卡套餐绑定的 15 美元优惠。
+    - step: 4
+      tool: device:commerce.cancel_order
+      arguments:
+        order_id: ord_1101
+        confirmed: true
+      expected_observation: >
+        订单被成功取消，状态更新为 `cancelled`。
+  final_answer: >
+    我已经帮你取消这笔待处理的运动相机订单 `ord_1101`。它还没进入发货流程，
+    所以现在可以安全撤销；需要注意的是，取消后会回收和存储卡套餐绑定的 15 美元优惠，
+    退款会原路返回，预计约 8 小时到账。
 max_steps: 5
 allowed_tools:
   - device:commerce.list_recent_orders
@@ -82,5 +117,6 @@ world:
 execution_rules:
   - 必须先定位订单，再检查状态和规则。
   - 只有在订单仍可取消时，才可执行取消。
+  - 若执行取消，答案必须同时覆盖优惠回收副作用和退款时效，不能只报告“已取消”。
   - 若执行取消，结果里应说明套餐优惠回收和退款时效。
 evaluation_rubric: []

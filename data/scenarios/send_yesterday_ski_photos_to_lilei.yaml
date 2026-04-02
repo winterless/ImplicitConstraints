@@ -13,6 +13,44 @@ suggested_plan:
 - 筛选昨天的滑雪相关照片。
 - 过滤出包含李雷的人像照片。
 - 打包结果并打开与李雷的分享会话。
+sample_result:
+  tool_trace:
+  - step: 1
+    tool: device:photos.search_by_metadata
+    arguments:
+      start_date: "2026-03-18"
+      end_date: "2026-03-18"
+      keyword: 滑雪
+      location_query: 雪场
+    expected_observation: >
+      返回昨日滑雪场景照片候选，后续仍需筛出含李雷人像的条目，避免把无关雪场风景一并打包。
+  - step: 2
+    tool: device:photos.search_by_metadata
+    arguments:
+      start_date: "2026-03-18"
+      end_date: "2026-03-18"
+      keyword: 李雷
+    expected_observation: >
+      在昨日时间范围内用姓名关键词收敛到含李雷出镜的人像照片 ID 列表，与滑雪场景取交集后可作为分享集合。
+  - step: 3
+    tool: device:photos.prepare_share_bundle
+    arguments:
+      photo_ids:
+      - ski_lilei_0318_01
+      - ski_lilei_0318_04
+      bundle_name: 滑雪-李雷-20260318
+    expected_observation: >
+      生成可发送的分享包 bundle_id，仅包含上一步筛出的照片。
+  - step: 4
+    tool: device:messaging.open_contact_thread
+    arguments:
+      contact_name: 李雷
+      intent: share_photos
+    expected_observation: >
+      打开与李雷的会话或分享入口，准备挂载分享包发送。
+  final_answer: >
+    我已把昨天（3 月 18 日）滑雪场景里拍到李雷的照片筛出来并打成分享包，只保留他出镜的条目。
+    已为你打开与李雷的对话/分享界面，你确认后即可发送，避免混入其他风景或无关人物照片。
 max_steps: 6
 allowed_tools:
 - device:photos.search_by_metadata
@@ -66,9 +104,32 @@ world:
       guidance_started: false
       expected_arrival_time: null
       selected_route_summary: null
+    tool_responses:
+      photos.search_by_metadata:
+        photos:
+        - photo_id: ski_lilei_0318_01
+          taken_at: "2026-03-18T11:20:00"
+          album: Ski Trip
+          labels:
+          - 滑雪
+          - 人像
+          faces:
+          - 李雷
+        - photo_id: ski_lilei_0318_04
+          taken_at: "2026-03-18T14:05:00"
+          album: Ski Trip
+          labels:
+          - 滑雪
+          faces:
+          - 李雷
+      photos.prepare_share_bundle:
+        bundle_id: bundle_ski_lilei_0318
+      messaging.open_contact_thread:
+        thread_id: dm_lilei
+        opened: true
 execution_rules:
-- 时间范围应限定为昨天。
-- 场景可由相册、地点或视觉标签辅助识别为滑雪。
-- 人脸匹配对象是李雷本人。
-- 发送前应尽量只包含命中照片，避免混入无关内容。
+- 时间范围应限定为日历上的昨天（相对当前情景日期），不得扩展到其他日期。
+- 场景可由相册、地点或视觉标签辅助识别为滑雪；筛图须先场景后人物或等价可复核的交集逻辑。
+- 人脸或姓名过滤的对象必须是李雷本人，不得用同名替代。
+- 发送前应尽量只包含命中照片；打包与打开会话前须能对应到具体 photo_id 或分享包，避免混入无关内容。
 evaluation_rubric: []

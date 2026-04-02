@@ -13,11 +13,39 @@ suggested_plan:
 - 先确认今晚 7 点前后的空闲窗口。
 - 计算到会场的最优路线和 ETA。
 - 对比演出开始时间与入场缓冲，输出能否赶到。
+sample_result:
+  tool_trace:
+  - step: 1
+    tool: device:schedule.list_free_slots
+    arguments:
+      date: '2026-03-19'
+    expected_observation: >
+      今晚 19:00 前后应存在连续空闲时间，没有别的日程会直接卡住去演唱会这件事。
+  - step: 2
+    tool: device:events.get_venue_details
+    arguments:
+      event_name: 林俊杰演唱会
+      city: 杭州
+    expected_observation: >
+      场馆信息里应包含 19:00 开始和建议至少提前 20 分钟到场，
+      因此实际判断目标是能否在 18:40 前到达。
+  - step: 3
+    tool: device:maps.get_routes
+    arguments:
+      destination: Hangzhou Olympic Sports Center
+    expected_observation: >
+      最快路线 ETA 约为 22 分钟；从当前 18:10 出发，预计 18:32 到，
+      仍早于建议到场时间 18:40，因此结论应是赶得上。
+  final_answer: >
+    现在出发的话，你大概率赶得上。因为今晚 7 点前后没有别的日程冲突，
+    演唱会建议至少提前 20 分钟到场，而最快路线 ETA 约 22 分钟，
+    按当前时间估算大约 18:32 就能到，仍早于 18:40 的建议到场线。
 max_steps: 6
 allowed_tools:
 - device:schedule.get_next_event
 - device:schedule.list_free_slots
 - device:events.get_venue_details
+- device:maps.get_routes
 - device:weather.get_forecast
 - device:weather.check_weather
 - device:temperature.check
@@ -48,10 +76,10 @@ world:
   state:
     calendar:
       next_event:
-        title: Upcoming task
-        start_time: '19:30'
-        location: Hangzhou Olympic Sports Center
-        boarding_buffer_minutes: 30
+        title: Night reading
+        start_time: '21:30'
+        location: Home
+        boarding_buffer_minutes: 0
     maps:
       routes_by_destination:
         Hangzhou Olympic Sports Center:
@@ -73,6 +101,17 @@ world:
       guidance_started: false
       expected_arrival_time: null
       selected_route_summary: null
+    tool_responses:
+      schedule.list_free_slots:
+        free_slots:
+          - start_time: '2026-03-19 18:00'
+            end_time: '2026-03-19 21:00'
+      events.get_venue_details:
+        venue:
+          event_name: 林俊杰演唱会
+          name: Hangzhou Olympic Sports Center
+          start_time: '2026-03-19 19:00'
+          recommended_arrival_buffer_minutes: 20
 execution_rules:
 - 需要确认今晚是否已有日程冲突。
 - 需要估算到目标场馆的真实 ETA。

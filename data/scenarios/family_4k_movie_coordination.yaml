@@ -14,6 +14,47 @@ suggested_plan:
   - 查询上次在家观影记录和当前网络表现。
   - 查询可用空档并避开固定周三安排。
   - 创建新的家庭观影提醒。
+sample_result:
+  tool_trace:
+    - step: 1
+      tool: device:family.get_visit_window
+      arguments: {}
+      expected_observation: >
+        外孙离京日期为 2026-04-21，因此新观影必须安排在该日期之前。
+    - step: 2
+      tool: device:schedule.get_next_event
+      arguments: {}
+      expected_observation: >
+        应看到每周三晚间有固定的家庭观影沙龙，占用周三窗口，不能与之叠放新的家庭观影。
+    - step: 3
+      tool: device:schedule.list_free_slots
+      arguments:
+        city: Beijing
+      expected_observation: >
+        空闲档落在周日与周一晚间在家时段，且在外孙离京前；周三晚间不在可用空档列表中。
+    - step: 4
+      tool: device:network.check_stream_quality
+      arguments:
+        profile: 4k_streaming
+      expected_observation: >
+        千兆宽带下 4K 缓冲稳定，平均缓冲时长很短，满足家庭 4K 观影体验要求。
+    - step: 5
+      tool: device:media.get_watch_history
+      arguments:
+        location: Home
+      expected_observation: >
+        上次在家看的是《星际穿越》，新安排应避免简单重复同一部，除非用户另有偏好。
+    - step: 6
+      tool: device:reminder.create
+      arguments:
+        title: 家庭4K观影
+        remind_at: "2026-04-20 19:30"
+        note: 外孙离京前安排的家庭观影
+      expected_observation: >
+        提醒创建成功，对应周一晚间空档，避开周三固定观影且在外孙离京前。
+  final_answer: >
+    外孙 4 月 21 日离京，因此观影须在这之前；你周三晚间有固定观影沙龙，不能在同一时段再排一场家庭场。
+    当前网络对 4K 足够稳定。建议在 4 月 20 日（周一）晚间 19:30 安排家庭 4K 观影，并已为你创建对应提醒。
 max_steps: 6
 allowed_tools:
   - device:family.get_visit_window
@@ -48,11 +89,23 @@ world:
         - start: "2026-04-20 20:00"
           end: "2026-04-20 22:30"
           location: Home
-        - start: "2026-04-22 20:00"
-          end: "2026-04-22 22:00"
-          location: Home
     reminders: {}
     tool_responses:
+      schedule.list_free_slots:
+        slots:
+          - start: "2026-04-19 19:30"
+            end: "2026-04-19 22:00"
+            location: Home
+          - start: "2026-04-20 20:00"
+            end: "2026-04-20 22:30"
+            location: Home
+      schedule.get_next_event:
+        event:
+          title: 周三固定观影沙龙
+          start_time: "2026-04-22 20:00"
+          end_time: "2026-04-22 21:30"
+          location: Home
+          recurrence: weekly_wednesday
       family.get_visit_window:
         visit:
           person: 外孙

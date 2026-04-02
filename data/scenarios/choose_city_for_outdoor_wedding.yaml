@@ -13,6 +13,26 @@ suggested_plan:
   - 查询广州和深圳今天的天气条件。
   - 比较影响户外婚礼的关键维度。
   - 输出推荐城市和关键原因，必要时给出不建议户外举办的提醒。
+sample_result:
+  tool_trace:
+    - step: 1
+      tool: device:weather.compare_cities
+      arguments:
+        cities:
+          - Guangzhou
+          - Shenzhen
+      expected_observation: >
+        广州为 light_rain，降雨概率高、湿度大；深圳为 cloudy，降雨概率明显更低、体感更舒适。
+    - step: 2
+      tool: device:temperature.check
+      arguments:
+        city: Shenzhen
+      expected_observation: >
+        深圳气温与体感相对适中，无极端高温或强风描述，更利于户外仪式与宾客停留。
+  final_answer: >
+    综合降雨、湿度和体感，**更推荐深圳**作为今天户外婚礼的城市：深圳以多云为主、降雨概率低得多，
+    宾客淋雨与场地泥泞风险更小。广州虽有较高气温信号，但伴随明显降雨与高湿，户外仪式不确定性更大。
+    若你必须在广州办，建议准备充足雨棚与备用室内环节；就「今天」而言深圳整体更稳。
 max_steps: 4
 allowed_tools:
   - device:weather.compare_cities
@@ -56,9 +76,14 @@ world:
             rain_probability: 18
             humidity: 68
             wind_level: gentle
+      temperature.check:
+        city: Shenzhen
+        temperature_c: 27
+        feels_like_c: 29
+        comfort_outdoor: good
 execution_rules:
   - 必须基于两地天气做比较，而不是只返回单城天气。
-  - 最终输出必须给出推荐城市和关键原因。
+  - 最终输出必须给出推荐城市和关键原因，且至少引用一项非气温因素（如降雨概率、湿度或风况）支撑户外可行性判断。
   - 若某城市存在明显降雨风险，应降低其作为户外婚礼地点的优先级。
   - 温差只能作为辅助因素，不能替代整体天气适配性判断。
 evaluation_rubric: []

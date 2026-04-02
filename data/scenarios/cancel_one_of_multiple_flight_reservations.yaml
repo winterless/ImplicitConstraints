@@ -13,6 +13,31 @@ suggested_plan:
   - 列出近期航班预订。
   - 识别与近期日程冲突的一张。
   - 查看其取消规则并在允许时取消。
+sample_result:
+  tool_trace:
+    - step: 1
+      tool: device:booking.list_upcoming_bookings
+      arguments:
+        booking_type: flight
+      expected_observation: >
+        列表中有两张近期航班，其中 `flt_601` 带有 `overlaps_with_blocked_window`
+        的冲突提示，而 `flt_602` 没有冲突，因此更可能是用户想取消的那一张。
+    - step: 2
+      tool: device:booking.get_booking_status
+      arguments:
+        booking_id: flt_601
+      expected_observation: >
+        该航班仍可取消，取消费为 0，且没有 linked bookings，
+        说明识别到目标后可以直接安全执行。
+    - step: 3
+      tool: device:booking.cancel_booking
+      arguments:
+        booking_id: flt_601
+      expected_observation: >
+        `flt_601` 被成功取消，而另一张 `flt_602` 保持 confirmed，不应被误操作。
+  final_answer: >
+    我已帮你取消更可能有冲突的那张航班，也就是 `flt_601`。它和你近期被占用的时间窗口重叠，
+    而且取消不收费用；另一张 `flt_602` 我没有动，避免误取消不相关的预订。
 max_steps: 5
 allowed_tools:
   - device:booking.list_upcoming_bookings
@@ -90,5 +115,6 @@ world:
 execution_rules:
   - 必须先通过列表工具完成候选识别。
   - 必须优先处理与近期冲突的那张航班。
+  - 不得在未完成候选消解时直接取消任意一张，也不得误取消无冲突的其他航班。
   - 在目标明确且允许取消时，应完成取消。
 evaluation_rubric: []

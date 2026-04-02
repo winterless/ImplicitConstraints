@@ -13,6 +13,30 @@ suggested_plan:
   - 列出近期订单，定位笔记本订单。
   - 查询当前状态和取消规则。
   - 输出是否还能取消，并说明退款和截止时间。
+sample_result:
+  tool_trace:
+    - step: 1
+      tool: device:commerce.list_recent_orders
+      arguments: {}
+      expected_observation: >
+        列表中 `ord_1208` 为 Laptop 14-inch，状态 payment_authorized，尚未发货；
+        另有配件订单 `ord_1209` 便于区分主单。
+    - step: 2
+      tool: device:commerce.get_recent_order_status
+      arguments:
+        order_id: ord_1208
+      expected_observation: >
+        笔记本订单仍可取消，`shipping_label_created` 为 false，预计发货时间晚于当前时刻。
+    - step: 3
+      tool: device:commerce.get_order_policy
+      arguments:
+        order_id: ord_1208
+      expected_observation: >
+        取消截止为当日 17:40，无补货费，退款原路返回但约 24 小时到账。
+  final_answer: >
+    核对结果：笔记本订单 `ord_1208` 目前仍在发货前阶段，**系统上仍允许取消**，截止时间是今天 17:40。
+    取消后预计原路退款，约 24 小时到账、无额外手续费。你刚刚问的是「还能不能取消」，我这边**不会擅自点取消**；
+    若你确认要取消，请明确说一声我再代为操作。
 max_steps: 5
 allowed_tools:
   - device:commerce.list_recent_orders
@@ -82,7 +106,7 @@ world:
             status: cancelled
             cancelable: false
 execution_rules:
-  - 必须先定位笔记本订单，再检查状态与规则。
+  - 必须先定位笔记本订单，再检查状态与规则；取消截止与退款到账时间须与 `get_order_policy` 一致，不得臆造。
   - 正确完成条件是说明该订单当前仍可取消、截止时间是什么、退款多久到账。
   - 未获进一步确认前不应直接执行取消。
 evaluation_rubric: []

@@ -13,11 +13,51 @@ suggested_plan:
 - 先读取当前电量、预计续航和耗电画像。
 - 估算回家 ETA，并判断是否存在续航缺口。
 - 若不足，则冻结高耗电后台并应用省电方案。
+sample_result:
+  tool_trace:
+  - step: 1
+    tool: device:power.get_battery_status
+    arguments: {}
+    expected_observation: >
+      应读到当前电量偏低、预计续航只略高于十几分钟，
+      且存在短视频、照片备份等高耗电后台应用。
+  - step: 2
+    tool: device:maps.get_routes
+    arguments:
+      destination: Home
+    expected_observation: >
+      回家最快路线 ETA 约为 22 分钟，比当前保守续航更紧张，
+      说明存在在到家前掉电的风险。
+  - step: 3
+    tool: device:power.freeze_background_apps
+    arguments:
+      app_ids:
+      - short_video
+      - photo_backup
+      strategy: aggressive_background_only
+    expected_observation: >
+      高耗电但非关键通信的后台应用被限制，
+      优先削减不必要耗电而不影响基础联络能力。
+  - step: 4
+    tool: device:power.apply_saving_plan
+    arguments:
+      brightness_percent: 35
+      disable_cellular: false
+      disable_wifi: false
+      low_power_mode: true
+    expected_observation: >
+      省电方案被应用，设备进入更保守的耗电模式，
+      从而提高撑到回家的成功率。
+  final_answer: >
+    以你现在的电量，直接放着不管有可能撑不到回家，所以我会判定为“有风险”。
+    我已经优先冻结了高耗电后台应用，并打开低电量省电策略；这样能尽量保住续航，
+    同时不直接切断关键通信能力。
 max_steps: 6
 allowed_tools:
 - device:power.get_battery_status
 - device:power.freeze_background_apps
 - device:power.apply_saving_plan
+- device:maps.get_routes
 - device:schedule.get_next_event
 - device:schedule.list_free_slots
 - device:weather.get_forecast
@@ -66,6 +106,32 @@ world:
       guidance_started: false
       expected_arrival_time: null
       selected_route_summary: null
+    tool_responses:
+      power.get_battery_status:
+        battery:
+          level_percent: 12
+          estimated_minutes_remaining: 16
+          low_power_mode: false
+          high_drain_apps:
+            - app_id: short_video
+              drain_level: high
+            - app_id: photo_backup
+              drain_level: medium
+            - app_id: chat_app
+              drain_level: low
+    tool_state_updates:
+      power.freeze_background_apps:
+        power:
+          restricted_apps:
+            - short_video
+            - photo_backup
+      power.apply_saving_plan:
+        power:
+          saving_plan:
+            brightness_percent: 35
+            disable_cellular: false
+            disable_wifi: false
+            low_power_mode: true
 execution_rules:
 - 需要估算当前到家的剩余路程或 ETA。
 - 需要评估当前电量与预计耗电之间的差值。

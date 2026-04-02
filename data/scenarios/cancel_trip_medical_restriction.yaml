@@ -13,6 +13,25 @@ suggested_plan:
   - Inspect the trip booking and medical waiver status.
   - Verify that the doctor-advised restriction is already sufficient for protected cancellation.
   - Cancel the trip.
+sample_result:
+  tool_trace:
+    - step: 1
+      tool: device:booking.get_booking_status
+      arguments:
+        booking_id: trip_221
+      expected_observation: >
+        行程捆绑 `trip_221` 已 `confirmed`，`medical_waiver_available=true` 且
+        `documentation_on_file=true`，取消费为 0，退款为全额旅行抵用金。
+    - step: 2
+      tool: device:booking.cancel_booking
+      arguments:
+        booking_id: trip_221
+        confirmed: true
+      expected_observation: >
+        返回 `cancelled=true`，酒店与租车等 `handled_together` 的关联服务应一并解约。
+  final_answer: >
+    我查过预订：你的医疗豁免材料已在档，医生限制出行足以走保护性取消路径。
+    已完成整单行程取消，关联酒店与租车会随捆绑一并处理，无额外取消费。
 max_steps: 4
 allowed_tools:
   - device:booking.get_booking_status

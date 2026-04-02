@@ -13,6 +13,27 @@ suggested_plan:
   - Convert 9 AM UTC into Sydney local time.
   - Apply a practical reminder buffer.
   - Create the team reminder at the resulting local time.
+sample_result:
+  tool_trace:
+  - step: 1
+    tool: device:time.convert_timezone
+    arguments:
+      source_time: "2026-04-21 09:00"
+      source_timezone: UTC
+      target_timezone: Australia/Sydney
+    expected_observation: >
+      9:00 UTC 对应悉尼本地 19:00（同一日历日），并给出活动前缓冲后的建议提醒时刻。
+  - step: 2
+    tool: device:reminder.create
+    arguments:
+      title: 悉尼团队 webinar 提醒
+      remind_at: "2026-04-21 18:40"
+      note: 会议 19:00 悉尼本地开始（由 09:00 UTC 换算）
+    expected_observation: >
+      在悉尼本地时间创建提醒，早于 19:00 开始，满足会前准备缓冲而非把 UTC 时刻直接当提醒点。
+  final_answer: >
+    9:00 UTC 的会议在悉尼是当天晚上 19:00。给团队设提醒应使用悉尼本地时间，并略早于开场；
+    例如 18:40 提醒，留出上线与材料准备时间。不要把 9:00 直接当成悉尼团队的提醒时间。
 max_steps: 4
 allowed_tools:
   - device:time.convert_timezone
@@ -59,9 +80,9 @@ world:
             remind_at: "2026-04-21 18:40"
             note: Webinar starts at 19:00 Sydney time
 execution_rules:
-  - 必须先完成时区转换，再设置提醒。
-  - 创建的提醒时间必须是 Sydney 本地时间且早于 webinar 开始时间。
-  - 不能把 9 AM UTC 直接当成提醒时间。
+  - 必须先完成从 UTC 到 Australia/Sydney 的换算，再创建提醒；顺序上不得用未换算时刻直接落提醒。
+  - 提醒须用悉尼本地时间表达，且早于活动开始，留出可操作的会前缓冲。
+  - 不能把 9:00 UTC 或纽约本地等错误锚点直接当作悉尼团队的提醒时间。
 evaluation_rubric:
   - criterion: The agent converted the webinar time before creating a reminder.
     check:

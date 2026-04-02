@@ -13,6 +13,37 @@ suggested_plan:
 - 先解析 PDF 的章节、表格与关键段落。
 - 结合用户标签检索与本人职责相关的内容。
 - 只输出行动项、时间点、依赖方和优先级。
+sample_result:
+  tool_trace:
+  - step: 1
+    tool: device:documents.get_active_document
+    arguments: {}
+    expected_observation: >
+      当前活动文档应是老板刚发来的 PDF，能拿到文档 ID 与标题，
+      作为后续解析的输入对象。
+  - step: 2
+    tool: device:documents.parse_pdf
+    arguments:
+      document_id: boss_pdf_0319
+    expected_observation: >
+      解析结果应提取出与发布计划、埋点补齐、灰度跟进相关的章节与段落，
+      说明这不是泛泛摘要，而是可继续抽取行动项的结构化内容。
+  - step: 3
+    tool: device:profile.get_user_labels
+    arguments: {}
+    expected_observation: >
+      用户标签显示其职责偏产品与增长项目协同，因此需要过滤掉仅属于法务、
+      财务或其他团队的事项。
+  - step: 4
+    tool: device:tasks.extract_action_items
+    arguments:
+      content: 与会员增长改版及你本人职责相关的 PDF 内容
+    expected_observation: >
+      结构化输出里应只保留与你相关的行动项，包括截止时间、依赖方和未明确项。
+  final_answer: >
+    我只整理了和你本人相关的行动项：1）本周五前补齐会员改版埋点方案；2）下周二前和数据团队确认灰度指标口径；
+    3）跟设计同学在评审前锁定权益页文案。依赖方分别是数据团队和设计团队。
+    如果某项截止时间在 PDF 里没有写死，我会明确标注为待确认，而不会把全文都泛泛总结给你。
 max_steps: 6
 allowed_tools:
 - device:reminder.check
@@ -26,6 +57,7 @@ allowed_tools:
 - device:messaging.open_contact_thread
 - device:timer.create
 - device:documents.parse_pdf
+- device:tasks.extract_action_items
 - device:profile.get_user_labels
 - device:documents.get_active_document
 - device:alarm.create
@@ -64,6 +96,43 @@ world:
       guidance_started: false
       expected_arrival_time: null
       selected_route_summary: null
+    tool_responses:
+      documents.get_active_document:
+        document:
+          document_id: boss_pdf_0319
+          title: Q2 会员增长项目周会纪要.pdf
+          document_type: pdf
+      documents.parse_pdf:
+        parsed_document:
+          document_id: boss_pdf_0319
+          title: Q2 会员增长项目周会纪要.pdf
+          sections:
+            - heading: 会员改版发布准备
+              summary: 需要在本周五前补齐埋点方案并和数据团队确认灰度指标。
+            - heading: 设计与内容收口
+              summary: 权益页文案需在评审前与设计团队对齐。
+            - heading: 财务与法务事项
+              summary: 主要由其他团队跟进，与用户本人职责关系较弱。
+      profile.get_user_labels:
+        labels:
+          role: 产品经理
+          teams:
+            - 会员增长
+            - 增长平台
+      tasks.extract_action_items:
+        action_items:
+          - owner: 用户本人
+            task: 补齐会员改版埋点方案
+            deadline: 本周五
+            dependency: 数据团队
+          - owner: 用户本人
+            task: 与数据团队确认灰度指标口径
+            deadline: 下周二
+            dependency: 数据团队
+          - owner: 用户本人
+            task: 在评审前锁定权益页文案
+            deadline: 待确认
+            dependency: 设计团队
 execution_rules:
 - 文档可能很长，需先做结构化解析。
 - 需要引入本地用户标签、岗位职责或项目上下文。

@@ -13,6 +13,27 @@ suggested_plan:
   - Query the next matching Line 1 departure toward Incheon.
   - Compare live and scheduled departure times.
   - Return wait time and whether the train is delayed.
+sample_result:
+  tool_trace:
+  - step: 1
+    tool: device:transit.get_next_departure
+    arguments:
+      station: Seoul Station
+      line: Line 1
+      direction: Incheon
+    expected_observation: >
+      下一班计划 18:18 发车，但预计 18:24 才发，等待约 12 分钟，
+      相对计划晚点，应以 expected_departure 与 scheduled_departure 的差为准说明延误。
+  - step: 2
+    tool: device:timer.create
+    arguments:
+      duration_seconds: 720
+      label: Line1 Incheon 上车提醒
+    expected_observation: >
+      创建与等待时间一致的倒计时，便于在站台到时再确认站台屏，而不是只看静态时刻表。
+  final_answer: >
+    下一班往仁川方向的 1 号线预计还要等约 12 分钟（以当前在首尔站查询为准）。
+    相对时刻表计划发车 18:18，预计实际 18:24 左右发车，属于晚点；建议你以站台显示为准并留意后续班次调整。
 max_steps: 3
 allowed_tools:
   - device:transit.get_next_departure
@@ -41,6 +62,7 @@ world:
     scenario_source: query_top100_batch1
     source_query_id: seed_dataset_turn_e_part4.jsonl#58
   state:
+    timers: {}
     tool_responses:
       transit.get_next_departure:
         departure:
@@ -51,8 +73,17 @@ world:
           expected_departure: "18:24"
           wait_minutes: 12
           delayed: true
+      timer.create:
+        timer_id: line1_icn_wait_01
+        ends_at: "2026-04-18T18:24:00+09:00"
+    tool_state_updates:
+      timer.create:
+        timers:
+          line1_icn_wait_01:
+            label: Line1 Incheon 上车提醒
+            ends_at: "2026-04-18T18:24:00+09:00"
 execution_rules:
-  - 必须返回下一班匹配列车的等待时间。
-  - 必须明确说明是否延误。
-  - 不能把静态线路信息当成答案。
+  - 必须返回下一班匹配列车（方向与线路一致）的等待时间，并与计划时刻对比。
+  - 必须明确说明是否延误，且延误应体现为计划发车与预计/实际发车的差异，不得凭感觉断言。
+  - 不能把静态线路介绍或无关车次当成答案；若仅有一条实时结果，也应说明其下一站/方向核验方式。
 evaluation_rubric: []

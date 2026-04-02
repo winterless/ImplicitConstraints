@@ -13,6 +13,30 @@ suggested_plan:
   - 查询用户标签，理解这是面向初中生的集体观看场景。
   - 检查近期观影记录，避免重复。
   - 从候选中筛出主题契合且年龄合适的作品。
+sample_result:
+  tool_trace:
+    - step: 1
+      tool: device:profile.get_user_labels
+      arguments: {}
+      expected_observation: >
+        标签显示为初中教师、课堂放映场景，并偏好励志真实故事，说明内容强度与课堂可讨论性比单纯关键词更重要。
+    - step: 2
+      tool: device:media.get_watch_history
+      arguments: {}
+      expected_observation: >
+        近期已放映过 Hidden Figures 与 Wonder，应避免再推荐这两部以免课堂重复。
+    - step: 3
+      tool: device:media.search_recommendations
+      arguments:
+        mood: perseverance classroom
+        unseen_only: true
+      expected_observation: >
+        候选中含多部 perseverance 主题影片；其中 Akeelah and the Bee、Queen of Katwe、McFarland, USA 为 PG，
+        The Pursuit of Happyness 为 PG-13，课堂场景下应优先 PG 且 classroom_fit 更高的条目。
+  final_answer: >
+    建议优先选《拼字比赛的小胜利》（Akeelah and the Bee）或《卡推女王》（Queen of Katwe）：均为 PG，主题紧扣坚持与克服困难，
+    且更适合集体观看讨论。可补一部《麦克法兰》（McFarland, USA）作为运动/团队向备选。暂不优先推荐《当幸福来敲门》这类 PG-13，
+    情绪强度更高，需你确认校规与家长告知后再用。
 max_steps: 5
 allowed_tools:
   - device:profile.get_user_labels
@@ -92,7 +116,8 @@ world:
             classroom_fit: high
             previously_watched: false
 execution_rules:
-  - 必须考虑初中生观看场景，而不是只按 perseverance 标签推荐。
-  - 应避开明显更成熟的候选。
-  - 推荐结果应控制在少量作品，并体现主题与课堂适配理由。
+  - 必须结合课堂/初中生场景筛选，而不是只按 perseverance 标签堆片单。
+  - 默认优先 PG 与较高 classroom_fit；对 PG-13 应显式提示强度与审批风险。
+  - 应利用观影历史避免重复推荐近期已放映作品。
+  - 输出控制在少量候选，并说明主题契合与年龄/课堂适配理由。
 evaluation_rubric: []

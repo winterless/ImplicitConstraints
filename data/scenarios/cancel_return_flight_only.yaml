@@ -13,6 +13,25 @@ suggested_plan:
   - Inspect the round-trip booking details.
   - Verify that the return leg can be cancelled independently.
   - Cancel only the return flight.
+sample_result:
+  tool_trace:
+    - step: 1
+      tool: device:booking.get_booking_status
+      arguments:
+        booking_id: fl_770
+      expected_observation: >
+        往返行程中 outbound 已完成，return 段 Las Vegas -> Miami 仍 `cancelable=true`，
+        且 `return_only_supported=true`，取消费约 45 美元，应避免误伤已完成航段。
+    - step: 2
+      tool: device:booking.cancel_booking
+      arguments:
+        booking_id: fl_770
+        confirmed: true
+      expected_observation: >
+        仅返程被取消，预订整体进入 `return_leg_cancelled`，不应把 outbound 标为取消。
+  final_answer: >
+    我已核对行程：去程已飞完，返程仍可单独取消并支持仅退返程。
+    已为你取消返程段，预计会产生约 45 美元取消费；去程记录保持已完成状态。
 max_steps: 4
 allowed_tools:
   - device:booking.get_booking_status
