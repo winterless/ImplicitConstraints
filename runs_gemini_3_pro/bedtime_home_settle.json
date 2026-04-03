@@ -1,0 +1,668 @@
+{
+  "status": "failed",
+  "scenario_id": "bedtime_home_settle",
+  "category": "implicit_reasoning",
+  "user_prompt": "我要睡了，帮我把家里切到睡眠前的安顿状态。",
+  "input_snapshot": {
+    "context": {
+      "date": "2026-03-19",
+      "local_time": "18:10",
+      "city": "Seattle",
+      "destination_hint": "Home",
+      "scenario_source": "mobile_implicit_cases_zh"
+    },
+    "allowed_tools": [
+      {
+        "server": "device",
+        "tool_name": "sleep_mode.enable",
+        "description": "开启设备或家庭的睡眠模式。",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "mode_name": {
+              "type": "string"
+            }
+          },
+          "required": []
+        },
+        "read_only": false
+      },
+      {
+        "server": "device",
+        "tool_name": "home.get_safety_status",
+        "description": "读取门锁、窗户、灯光、安防等家居状态。",
+        "input_schema": {
+          "type": "object",
+          "properties": {},
+          "required": []
+        },
+        "read_only": true
+      },
+      {
+        "server": "device",
+        "tool_name": "home.execute_scene",
+        "description": "执行智能家居场景或一组设备动作。",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "scene_name": {
+              "type": "string"
+            },
+            "devices": {
+              "type": "array"
+            },
+            "action": {
+              "type": "string"
+            }
+          },
+          "required": []
+        },
+        "read_only": false
+      },
+      {
+        "server": "device",
+        "tool_name": "timer.create",
+        "description": "创建一个倒计时。",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "duration_seconds": {
+              "type": "integer"
+            },
+            "label": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "duration_seconds"
+          ]
+        },
+        "read_only": false
+      },
+      {
+        "server": "device",
+        "tool_name": "timer.check",
+        "description": "查看倒计时状态。",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "timer_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "timer_id"
+          ]
+        },
+        "read_only": true
+      },
+      {
+        "server": "device",
+        "tool_name": "reminder.create",
+        "description": "创建提醒事项。",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string"
+            },
+            "remind_at": {
+              "type": "string"
+            },
+            "note": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "title"
+          ]
+        },
+        "read_only": false
+      },
+      {
+        "server": "device",
+        "tool_name": "reminder.check",
+        "description": "查看提醒事项状态。",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "reminder_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "reminder_id"
+          ]
+        },
+        "read_only": true
+      },
+      {
+        "server": "device",
+        "tool_name": "power.get_battery_status",
+        "description": "获取当前电量、预计续航和高耗电应用信息。",
+        "input_schema": {
+          "type": "object",
+          "properties": {},
+          "required": []
+        },
+        "read_only": true
+      },
+      {
+        "server": "device",
+        "tool_name": "weather.get_forecast",
+        "description": "获取指定地点和时段的天气预报。",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "location": {
+              "type": "string"
+            },
+            "date": {
+              "type": "string"
+            },
+            "time_range": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "location"
+          ]
+        },
+        "read_only": true
+      },
+      {
+        "server": "device",
+        "tool_name": "schedule.get_next_event",
+        "description": "获取日程中的下一个事件，可作为 calendar.get_next_event 的扩展别名。",
+        "input_schema": {
+          "type": "object",
+          "properties": {},
+          "required": []
+        },
+        "read_only": true
+      },
+      {
+        "server": "device",
+        "tool_name": "alarm.create",
+        "description": "创建闹钟。",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "time": {
+              "type": "string"
+            },
+            "label": {
+              "type": "string"
+            },
+            "enabled": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "time"
+          ]
+        },
+        "read_only": false
+      },
+      {
+        "server": "device",
+        "tool_name": "alarm.check",
+        "description": "查看闹钟状态。",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "alarm_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "alarm_id"
+          ]
+        },
+        "read_only": true
+      },
+      {
+        "server": "device",
+        "tool_name": "profile.get_user_labels",
+        "description": "获取用户的角色、项目归属、管理关系和偏好标签。",
+        "input_schema": {
+          "type": "object",
+          "properties": {},
+          "required": []
+        },
+        "read_only": true
+      },
+      {
+        "server": "device",
+        "tool_name": "note.search",
+        "description": "按标题或正文关键词搜索备忘录。",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "query"
+          ]
+        },
+        "read_only": true
+      },
+      {
+        "server": "device",
+        "tool_name": "weather.check_weather",
+        "description": "提供更口语化命名的天气查询接口。",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "location": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "location"
+          ]
+        },
+        "read_only": true
+      },
+      {
+        "server": "device",
+        "tool_name": "schedule.list_free_slots",
+        "description": "查询某个时间范围内的空闲日程窗口。",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "start_time": {
+              "type": "string"
+            },
+            "end_time": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "start_time",
+            "end_time"
+          ]
+        },
+        "read_only": true
+      },
+      {
+        "server": "device",
+        "tool_name": "travel.get_trip_brief",
+        "description": "获取近期出差或旅行的目的地、日期和停留时长。",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "date": {
+              "type": "string"
+            }
+          },
+          "required": []
+        },
+        "read_only": true
+      },
+      {
+        "server": "device",
+        "tool_name": "note.open",
+        "description": "打开指定备忘录。",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "note_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "note_id"
+          ]
+        },
+        "read_only": true
+      },
+      {
+        "server": "device",
+        "tool_name": "power.freeze_background_apps",
+        "description": "冻结高耗电后台应用或限制其后台活动。",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "app_ids": {
+              "type": "array"
+            },
+            "strategy": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "app_ids"
+          ]
+        },
+        "read_only": false
+      },
+      {
+        "server": "device",
+        "tool_name": "power.apply_saving_plan",
+        "description": "应用省电方案，例如降亮度、关蜂窝、限制刷新率等。",
+        "input_schema": {
+          "type": "object",
+          "properties": {
+            "brightness_percent": {
+              "type": "integer"
+            },
+            "disable_cellular": {
+              "type": "boolean"
+            },
+            "disable_wifi": {
+              "type": "boolean"
+            },
+            "low_power_mode": {
+              "type": "boolean"
+            }
+          },
+          "required": []
+        },
+        "read_only": false
+      }
+    ],
+    "agent_mode": "llm",
+    "world_mode": "llm_world_model",
+    "evaluator_mode": "llm"
+  },
+  "messages": [
+    {
+      "step": 0,
+      "role": "user",
+      "content": "我要睡了，帮我把家里切到睡眠前的安顿状态。"
+    },
+    {
+      "step": 1,
+      "role": "assistant",
+      "content": "用户准备睡觉，需要将家里切换到睡眠状态。在执行操作前，先检查家里的安全状态（门窗、灯光等）。",
+      "task_complete": false,
+      "tool_call": {
+        "server": "device",
+        "tool_name": "home.get_safety_status",
+        "arguments": {}
+      }
+    },
+    {
+      "step": 1,
+      "role": "world",
+      "tool_key": "device:home.get_safety_status",
+      "tool_name": "home.get_safety_status",
+      "arguments": {},
+      "success": true,
+      "message": "已成功获取当前家居安全状态。",
+      "data": {
+        "safety_status": {
+          "front_door_locked": false,
+          "bedroom_windows_closed": false,
+          "living_room_lights_on": true,
+          "security_armed": false,
+          "air_conditioner_mode": "cool",
+          "air_conditioner_temperature_c": 20
+        }
+      },
+      "state_changes": {}
+    },
+    {
+      "step": 2,
+      "role": "assistant",
+      "content": "已获取家居状态，发现前门未锁、窗户未关、客厅灯亮且安防未开启。接下来执行家居动作，将这些设备调整为睡眠安全状态。",
+      "task_complete": false,
+      "tool_call": {
+        "server": "device",
+        "tool_name": "home.execute_scene",
+        "arguments": {
+          "actions": [
+            {
+              "device": "front_door",
+              "action": "lock"
+            },
+            {
+              "device": "bedroom_windows",
+              "action": "close"
+            },
+            {
+              "device": "living_room_lights",
+              "action": "turn_off"
+            },
+            {
+              "device": "security",
+              "action": "arm"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "model_logs": [
+    {
+      "step": 1,
+      "agent_type": "llm",
+      "request_messages": [
+        {
+          "role": "system",
+          "content": "你是一个求解该任务的智能体，每一步只能选择一次工具调用来帮助用户。\n规则：\n1. 只能使用提供给你的工具。\n2. 当关键信息可能缺失时，优先先观察、再执行修改性操作。\n3. 你能看到的上下文可能不完整，重要约束可能隐藏在只读工具的返回里。\n4. 对涉及时间、截止时间、准时、预约、航班、会议或是否赶得上的请求，只要存在相关工具，就应先查询日程、事件或时刻信息，再决定路线或其他不可逆动作。\n5. 如果一个时间敏感的出行请求同时存在日历类工具和地图类工具，通常应先检查日历类工具。\n6. 不要默认最短距离就是最优方案；当路线或时间重要时，应比较可选项。\n7. 必须使用提供工具列表中的精确 tool_name 和 server 字符串，绝不要臆造工具名，例如 none。\n8. 不要输出 <think>、思维链、分析过程，也不要在 JSON 对象前后输出任何额外文本。\n9. 必须只返回一个 JSON 对象。\n10. `thought` 字段必须使用中文，简洁说明当前判断依据。\n11. 如果任务已经完成，返回 {\"thought\": \"...\", \"task_complete\": true}。\n12. 否则返回：\n{\n  \"thought\": \"中文说明\",\n  \"task_complete\": false,\n  \"tool_call\": {\n    \"server\": \"device\",\n    \"tool_name\": \"tool.name\",\n    \"arguments\": {}\n  }\n}\n不要包含 markdown 代码块围栏。"
+        },
+        {
+          "role": "user",
+          "content": "用户请求：\n我要睡了，帮我把家里切到睡眠前的安顿状态。\n\n世界上下文：\n{\n  \"date\": \"2026-03-19\",\n  \"local_time\": \"18:10\",\n  \"city\": \"Seattle\",\n  \"destination_hint\": \"Home\",\n  \"scenario_source\": \"mobile_implicit_cases_zh\"\n}\n\n可用工具：\n[\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"sleep_mode.enable\",\n    \"description\": \"开启设备或家庭的睡眠模式。\",\n    \"read_only\": false,\n    \"required_arguments\": []\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"home.get_safety_status\",\n    \"description\": \"读取门锁、窗户、灯光、安防等家居状态。\",\n    \"read_only\": true,\n    \"required_arguments\": []\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"home.execute_scene\",\n    \"description\": \"执行智能家居场景或一组设备动作。\",\n    \"read_only\": false,\n    \"required_arguments\": []\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"timer.create\",\n    \"description\": \"创建一个倒计时。\",\n    \"read_only\": false,\n    \"required_arguments\": [\n      \"duration_seconds\"\n    ]\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"timer.check\",\n    \"description\": \"查看倒计时状态。\",\n    \"read_only\": true,\n    \"required_arguments\": [\n      \"timer_id\"\n    ]\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"reminder.create\",\n    \"description\": \"创建提醒事项。\",\n    \"read_only\": false,\n    \"required_arguments\": [\n      \"title\"\n    ]\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"reminder.check\",\n    \"description\": \"查看提醒事项状态。\",\n    \"read_only\": true,\n    \"required_arguments\": [\n      \"reminder_id\"\n    ]\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"power.get_battery_status\",\n    \"description\": \"获取当前电量、预计续航和高耗电应用信息。\",\n    \"read_only\": true,\n    \"required_arguments\": []\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"weather.get_forecast\",\n    \"description\": \"获取指定地点和时段的天气预报。\",\n    \"read_only\": true,\n    \"required_arguments\": [\n      \"location\"\n    ]\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"schedule.get_next_event\",\n    \"description\": \"获取日程中的下一个事件，可作为 calendar.get_next_event 的扩展别名。\",\n    \"read_only\": true,\n    \"required_arguments\": []\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"alarm.create\",\n    \"description\": \"创建闹钟。\",\n    \"read_only\": false,\n    \"required_arguments\": [\n      \"time\"\n    ]\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"alarm.check\",\n    \"description\": \"查看闹钟状态。\",\n    \"read_only\": true,\n    \"required_arguments\": [\n      \"alarm_id\"\n    ]\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"profile.get_user_labels\",\n    \"description\": \"获取用户的角色、项目归属、管理关系和偏好标签。\",\n    \"read_only\": true,\n    \"required_arguments\": []\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"note.search\",\n    \"description\": \"按标题或正文关键词搜索备忘录。\",\n    \"read_only\": true,\n    \"required_arguments\": [\n      \"query\"\n    ]\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"weather.check_weather\",\n    \"description\": \"提供更口语化命名的天气查询接口。\",\n    \"read_only\": true,\n    \"required_arguments\": [\n      \"location\"\n    ]\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"schedule.list_free_slots\",\n    \"description\": \"查询某个时间范围内的空闲日程窗口。\",\n    \"read_only\": true,\n    \"required_arguments\": [\n      \"start_time\",\n      \"end_time\"\n    ]\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"travel.get_trip_brief\",\n    \"description\": \"获取近期出差或旅行的目的地、日期和停留时长。\",\n    \"read_only\": true,\n    \"required_arguments\": []\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"note.open\",\n    \"description\": \"打开指定备忘录。\",\n    \"read_only\": true,\n    \"required_arguments\": [\n      \"note_id\"\n    ]\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"power.freeze_background_apps\",\n    \"description\": \"冻结高耗电后台应用或限制其后台活动。\",\n    \"read_only\": false,\n    \"required_arguments\": [\n      \"app_ids\"\n    ]\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"power.apply_saving_plan\",\n    \"description\": \"应用省电方案，例如降亮度、关蜂窝、限制刷新率等。\",\n    \"read_only\": false,\n    \"required_arguments\": []\n  }\n]\n\n已观察到的记忆：\n{}\n\n最近执行轨迹：\n[\n  {\n    \"role\": \"user\",\n    \"content\": \"我要睡了，帮我把家里切到睡眠前的安顿状态。\"\n  }\n]\n\n请选出当前最合适的下一步，只返回一个 JSON 对象。"
+        }
+      ],
+      "raw_response": "{\n  \"thought\": \"用户准备睡觉，需要将家里切换到睡眠状态。在执行操作前，先检查家里的安全状态（门窗、灯光等）。\",\n  \"task_complete\": false,\n  \"tool_call\": {\n    \"server\": \"device\",\n    \"tool_name\": \"home.get_safety_status\",\n    \"arguments\": {}\n  }\n}",
+      "parsed_response": {
+        "thought": "用户准备睡觉，需要将家里切换到睡眠状态。在执行操作前，先检查家里的安全状态（门窗、灯光等）。",
+        "task_complete": false,
+        "tool_call": {
+          "server": "device",
+          "tool_name": "home.get_safety_status",
+          "arguments": {}
+        }
+      },
+      "repair_attempts": 0
+    },
+    {
+      "step": 2,
+      "agent_type": "llm",
+      "request_messages": [
+        {
+          "role": "system",
+          "content": "你是一个求解该任务的智能体，每一步只能选择一次工具调用来帮助用户。\n规则：\n1. 只能使用提供给你的工具。\n2. 当关键信息可能缺失时，优先先观察、再执行修改性操作。\n3. 你能看到的上下文可能不完整，重要约束可能隐藏在只读工具的返回里。\n4. 对涉及时间、截止时间、准时、预约、航班、会议或是否赶得上的请求，只要存在相关工具，就应先查询日程、事件或时刻信息，再决定路线或其他不可逆动作。\n5. 如果一个时间敏感的出行请求同时存在日历类工具和地图类工具，通常应先检查日历类工具。\n6. 不要默认最短距离就是最优方案；当路线或时间重要时，应比较可选项。\n7. 必须使用提供工具列表中的精确 tool_name 和 server 字符串，绝不要臆造工具名，例如 none。\n8. 不要输出 <think>、思维链、分析过程，也不要在 JSON 对象前后输出任何额外文本。\n9. 必须只返回一个 JSON 对象。\n10. `thought` 字段必须使用中文，简洁说明当前判断依据。\n11. 如果任务已经完成，返回 {\"thought\": \"...\", \"task_complete\": true}。\n12. 否则返回：\n{\n  \"thought\": \"中文说明\",\n  \"task_complete\": false,\n  \"tool_call\": {\n    \"server\": \"device\",\n    \"tool_name\": \"tool.name\",\n    \"arguments\": {}\n  }\n}\n不要包含 markdown 代码块围栏。"
+        },
+        {
+          "role": "user",
+          "content": "用户请求：\n我要睡了，帮我把家里切到睡眠前的安顿状态。\n\n世界上下文：\n{\n  \"date\": \"2026-03-19\",\n  \"local_time\": \"18:10\",\n  \"city\": \"Seattle\",\n  \"destination_hint\": \"Home\",\n  \"scenario_source\": \"mobile_implicit_cases_zh\"\n}\n\n可用工具：\n[\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"sleep_mode.enable\",\n    \"description\": \"开启设备或家庭的睡眠模式。\",\n    \"read_only\": false,\n    \"required_arguments\": []\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"home.get_safety_status\",\n    \"description\": \"读取门锁、窗户、灯光、安防等家居状态。\",\n    \"read_only\": true,\n    \"required_arguments\": []\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"home.execute_scene\",\n    \"description\": \"执行智能家居场景或一组设备动作。\",\n    \"read_only\": false,\n    \"required_arguments\": []\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"timer.create\",\n    \"description\": \"创建一个倒计时。\",\n    \"read_only\": false,\n    \"required_arguments\": [\n      \"duration_seconds\"\n    ]\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"timer.check\",\n    \"description\": \"查看倒计时状态。\",\n    \"read_only\": true,\n    \"required_arguments\": [\n      \"timer_id\"\n    ]\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"reminder.create\",\n    \"description\": \"创建提醒事项。\",\n    \"read_only\": false,\n    \"required_arguments\": [\n      \"title\"\n    ]\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"reminder.check\",\n    \"description\": \"查看提醒事项状态。\",\n    \"read_only\": true,\n    \"required_arguments\": [\n      \"reminder_id\"\n    ]\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"power.get_battery_status\",\n    \"description\": \"获取当前电量、预计续航和高耗电应用信息。\",\n    \"read_only\": true,\n    \"required_arguments\": []\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"weather.get_forecast\",\n    \"description\": \"获取指定地点和时段的天气预报。\",\n    \"read_only\": true,\n    \"required_arguments\": [\n      \"location\"\n    ]\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"schedule.get_next_event\",\n    \"description\": \"获取日程中的下一个事件，可作为 calendar.get_next_event 的扩展别名。\",\n    \"read_only\": true,\n    \"required_arguments\": []\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"alarm.create\",\n    \"description\": \"创建闹钟。\",\n    \"read_only\": false,\n    \"required_arguments\": [\n      \"time\"\n    ]\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"alarm.check\",\n    \"description\": \"查看闹钟状态。\",\n    \"read_only\": true,\n    \"required_arguments\": [\n      \"alarm_id\"\n    ]\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"profile.get_user_labels\",\n    \"description\": \"获取用户的角色、项目归属、管理关系和偏好标签。\",\n    \"read_only\": true,\n    \"required_arguments\": []\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"note.search\",\n    \"description\": \"按标题或正文关键词搜索备忘录。\",\n    \"read_only\": true,\n    \"required_arguments\": [\n      \"query\"\n    ]\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"weather.check_weather\",\n    \"description\": \"提供更口语化命名的天气查询接口。\",\n    \"read_only\": true,\n    \"required_arguments\": [\n      \"location\"\n    ]\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"schedule.list_free_slots\",\n    \"description\": \"查询某个时间范围内的空闲日程窗口。\",\n    \"read_only\": true,\n    \"required_arguments\": [\n      \"start_time\",\n      \"end_time\"\n    ]\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"travel.get_trip_brief\",\n    \"description\": \"获取近期出差或旅行的目的地、日期和停留时长。\",\n    \"read_only\": true,\n    \"required_arguments\": []\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"note.open\",\n    \"description\": \"打开指定备忘录。\",\n    \"read_only\": true,\n    \"required_arguments\": [\n      \"note_id\"\n    ]\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"power.freeze_background_apps\",\n    \"description\": \"冻结高耗电后台应用或限制其后台活动。\",\n    \"read_only\": false,\n    \"required_arguments\": [\n      \"app_ids\"\n    ]\n  },\n  {\n    \"server\": \"device\",\n    \"tool_name\": \"power.apply_saving_plan\",\n    \"description\": \"应用省电方案，例如降亮度、关蜂窝、限制刷新率等。\",\n    \"read_only\": false,\n    \"required_arguments\": []\n  }\n]\n\n已观察到的记忆：\n{}\n\n最近执行轨迹：\n[\n  {\n    \"role\": \"user\",\n    \"content\": \"我要睡了，帮我把家里切到睡眠前的安顿状态。\"\n  },\n  {\n    \"role\": \"assistant\",\n    \"content\": \"用户准备睡觉，需要将家里切换到睡眠状态。在执行操作前，先检查家里的安全状态（门窗、灯光等）。\"\n  },\n  {\n    \"role\": \"world\",\n    \"tool_key\": \"device:home.get_safety_status\",\n    \"success\": true,\n    \"message\": \"已成功获取当前家居安全状态。\",\n    \"data\": {\n      \"safety_status\": {\n        \"front_door_locked\": false,\n        \"bedroom_windows_closed\": false,\n        \"living_room_lights_on\": true,\n        \"security_armed\": false,\n        \"air_conditioner_mode\": \"cool\",\n        \"air_conditioner_temperature_c\": 20\n      }\n    }\n  }\n]\n\n请选出当前最合适的下一步，只返回一个 JSON 对象。"
+        }
+      ],
+      "raw_response": "{\n  \"thought\": \"已获取家居状态，发现前门未锁、窗户未关、客厅灯亮且安防未开启。接下来执行家居动作，将这些设备调整为睡眠安全状态。\",\n  \"task_complete\": false,\n  \"tool_call\": {\n    \"server\": \"device\",\n    \"tool_name\": \"home.execute_scene\",\n    \"arguments\": {\n      \"actions\": [\n        {\n          \"device\": \"front_door\",\n          \"action\": \"lock\"\n        },\n        {\n          \"device\": \"bedroom_windows\",\n          \"action\": \"close\"\n        },\n        {\n          \"device\": \"living_room_lights\",\n          \"action\": \"turn_off\"\n        },\n        {\n          \"device\": \"security\",\n          \"action\": \"arm\"\n        }\n      ]\n    }\n  }\n}",
+      "parsed_response": {
+        "thought": "已获取家居状态，发现前门未锁、窗户未关、客厅灯亮且安防未开启。接下来执行家居动作，将这些设备调整为睡眠安全状态。",
+        "task_complete": false,
+        "tool_call": {
+          "server": "device",
+          "tool_name": "home.execute_scene",
+          "arguments": {
+            "actions": [
+              {
+                "device": "front_door",
+                "action": "lock"
+              },
+              {
+                "device": "bedroom_windows",
+                "action": "close"
+              },
+              {
+                "device": "living_room_lights",
+                "action": "turn_off"
+              },
+              {
+                "device": "security",
+                "action": "arm"
+              }
+            ]
+          }
+        }
+      },
+      "repair_attempts": 0
+    }
+  ],
+  "world_logs": [
+    {
+      "step": 1,
+      "world_mode": "llm_world_model",
+      "request_messages": [
+        {
+          "role": "system",
+          "content": "你是一个隐式约束基准中的世界模型。\n你只负责模拟一次工具调用对应的环境响应。\n你的角色应当机械、克制、基于规则，而不是创造性发挥。\n规则：\n1. 只能使用提供给你的场景上下文、执行规则、当前世界状态、工具描述和工具调用信息。\n2. 不要帮助智能体，不要泄露隐藏约束，也不要给建议。\n3. 如果工具描述中有 returns 字段，优先把它当作返回模板；否则使用 success_response_schema 作为成功返回形状。\n4. 只读操作必须返回 state_changes = {}。\n5. 修改状态的操作可以返回一个可被深度合并进世界状态的局部 state_changes 对象。\n6. 如果基于当前状态或规则，这个工具调用应当失败，就设置 success=false，并用中性中文解释原因。\n7. thought_process 和 message 字段必须使用中文。\n8. 必须只返回一个包含 thought_process、success、message、data、state_changes 的 JSON 对象。\n不要使用 markdown 代码块围栏。"
+        },
+        {
+          "role": "user",
+          "content": "场景 ID：bedtime_home_settle\n场景类别：implicit_reasoning\n用户请求：我要睡了，帮我把家里切到睡眠前的安顿状态。\n\n场景上下文：\n{\n  \"date\": \"2026-03-19\",\n  \"local_time\": \"18:10\",\n  \"city\": \"Seattle\",\n  \"destination_hint\": \"Home\",\n  \"scenario_source\": \"mobile_implicit_cases_zh\"\n}\n\n执行规则：\n[\n  \"应同时覆盖安全、照明和环境舒适度。\",\n  \"需要先检查状态，再决定哪些动作需要执行。\",\n  \"空调应进入适合睡眠的曲线或模式，而非简单开关。\",\n  \"执行过程应尽量少打扰用户。\"\n]\n\n当前世界状态：\n{\n  \"calendar\": {\n    \"next_event\": {\n      \"title\": \"Upcoming task\",\n      \"start_time\": \"19:30\",\n      \"location\": \"Home\",\n      \"boarding_buffer_minutes\": 30\n    }\n  },\n  \"maps\": {\n    \"routes_by_destination\": {\n      \"Home\": [\n        {\n          \"route_id\": \"route_fast\",\n          \"label\": \"Fast route\",\n          \"distance_km\": 18,\n          \"eta_minutes\": 22,\n          \"traffic_level\": \"moderate\",\n          \"tolls\": false\n        },\n        {\n          \"route_id\": \"route_safe\",\n          \"label\": \"Safer route\",\n          \"distance_km\": 21,\n          \"eta_minutes\": 28,\n          \"traffic_level\": \"light\",\n          \"tolls\": true\n        }\n      ]\n    }\n  },\n  \"navigation\": {\n    \"active_destination\": null,\n    \"active_route_id\": null,\n    \"guidance_started\": false,\n    \"expected_arrival_time\": null,\n    \"selected_route_summary\": null\n  },\n  \"home\": {\n    \"safety_status\": {\n      \"front_door_locked\": false,\n      \"bedroom_windows_closed\": false,\n      \"living_room_lights_on\": true,\n      \"security_armed\": false,\n      \"air_conditioner_mode\": \"cool\",\n      \"air_conditioner_temperature_c\": 20\n    }\n  },\n  \"tool_responses\": {\n    \"home.get_safety_status\": {\n      \"safety_status\": {\n        \"front_door_locked\": false,\n        \"bedroom_windows_closed\": false,\n        \"living_room_lights_on\": true,\n        \"security_armed\": false,\n        \"air_conditioner_mode\": \"cool\",\n        \"air_conditioner_temperature_c\": 20\n      }\n    }\n  },\n  \"tool_state_updates\": {\n    \"sleep_mode.enable\": {\n      \"sleep_mode\": {\n        \"enabled\": true,\n        \"mode_name\": \"bedtime\"\n      }\n    },\n    \"home.execute_scene\": {\n      \"home\": {\n        \"safety_status\": {\n          \"front_door_locked\": true,\n          \"bedroom_windows_closed\": true,\n          \"living_room_lights_on\": false,\n          \"security_armed\": true,\n          \"air_conditioner_mode\": \"sleep\",\n          \"air_conditioner_temperature_c\": 24\n        }\n      }\n    }\n  }\n}\n\n工具描述：\n{\n  \"server\": \"device\",\n  \"tool_name\": \"home.get_safety_status\",\n  \"description\": \"读取门锁、窗户、灯光、安防等家居状态。\",\n  \"input_schema\": {\n    \"type\": \"object\",\n    \"properties\": {},\n    \"required\": []\n  },\n  \"read_only\": true,\n  \"returns\": null,\n  \"success_response_schema\": {\n    \"type\": \"object\",\n    \"properties\": {\n      \"safety_status\": {\n        \"type\": \"object\"\n      }\n    }\n  },\n  \"state_changes\": [],\n  \"failure_conditions\": [\n    \"home hub unavailable\"\n  ]\n}\n\n工具调用：\n{\n  \"server\": \"device\",\n  \"tool_name\": \"home.get_safety_status\",\n  \"arguments\": {}\n}\n\n请只模拟这一次动作对应的环境响应，并以中文填写解释字段。"
+        }
+      ],
+      "raw_response": "{\n  \"thought_process\": \"用户请求将家里切到睡眠前的安顿状态，根据执行规则需先检查当前家居安全状态。该工具为只读操作，用于获取当前门锁、窗户、灯光、安防及空调等状态，符合‘需要先检查状态，再决定哪些动作需要执行’的规则。\",\n  \"success\": true,\n  \"message\": \"已成功获取当前家居安全状态。\",\n  \"data\": {\n    \"safety_status\": {\n      \"front_door_locked\": false,\n      \"bedroom_windows_closed\": false,\n      \"living_room_lights_on\": true,\n      \"security_armed\": false,\n      \"air_conditioner_mode\": \"cool\",\n      \"air_conditioner_temperature_c\": 20\n    }\n  },\n  \"state_changes\": {}\n}",
+      "parsed_response": {
+        "thought_process": "用户请求将家里切到睡眠前的安顿状态，根据执行规则需先检查当前家居安全状态。该工具为只读操作，用于获取当前门锁、窗户、灯光、安防及空调等状态，符合‘需要先检查状态，再决定哪些动作需要执行’的规则。",
+        "success": true,
+        "message": "已成功获取当前家居安全状态。",
+        "data": {
+          "safety_status": {
+            "front_door_locked": false,
+            "bedroom_windows_closed": false,
+            "living_room_lights_on": true,
+            "security_armed": false,
+            "air_conditioner_mode": "cool",
+            "air_conditioner_temperature_c": 20
+          }
+        },
+        "state_changes": {}
+      },
+      "repair_attempts": 0
+    }
+  ],
+  "final_world_state": {
+    "calendar": {
+      "next_event": {
+        "title": "Upcoming task",
+        "start_time": "19:30",
+        "location": "Home",
+        "boarding_buffer_minutes": 30
+      }
+    },
+    "maps": {
+      "routes_by_destination": {
+        "Home": [
+          {
+            "route_id": "route_fast",
+            "label": "Fast route",
+            "distance_km": 18,
+            "eta_minutes": 22,
+            "traffic_level": "moderate",
+            "tolls": false
+          },
+          {
+            "route_id": "route_safe",
+            "label": "Safer route",
+            "distance_km": 21,
+            "eta_minutes": 28,
+            "traffic_level": "light",
+            "tolls": true
+          }
+        ]
+      }
+    },
+    "navigation": {
+      "active_destination": null,
+      "active_route_id": null,
+      "guidance_started": false,
+      "expected_arrival_time": null,
+      "selected_route_summary": null
+    },
+    "home": {
+      "safety_status": {
+        "front_door_locked": false,
+        "bedroom_windows_closed": false,
+        "living_room_lights_on": true,
+        "security_armed": false,
+        "air_conditioner_mode": "cool",
+        "air_conditioner_temperature_c": 20
+      }
+    },
+    "tool_responses": {
+      "home.get_safety_status": {
+        "safety_status": {
+          "front_door_locked": false,
+          "bedroom_windows_closed": false,
+          "living_room_lights_on": true,
+          "security_armed": false,
+          "air_conditioner_mode": "cool",
+          "air_conditioner_temperature_c": 20
+        }
+      }
+    },
+    "tool_state_updates": {
+      "sleep_mode.enable": {
+        "sleep_mode": {
+          "enabled": true,
+          "mode_name": "bedtime"
+        }
+      },
+      "home.execute_scene": {
+        "home": {
+          "safety_status": {
+            "front_door_locked": true,
+            "bedroom_windows_closed": true,
+            "living_room_lights_on": false,
+            "security_armed": true,
+            "air_conditioner_mode": "sleep",
+            "air_conditioner_temperature_c": 24
+          }
+        }
+      }
+    }
+  },
+  "evaluation": null,
+  "error": "Unexpected argument: actions",
+  "runtime_config": {
+    "agent": {
+      "mode": "llm",
+      "provider": "gemini",
+      "base_url": "",
+      "model": "gemini-3.1-pro-preview",
+      "api_key_env": "GEMINI_API_KEY,GOOGLE_API_KEY",
+      "api_key_file": ".secrets/gemini_api_key.txt",
+      "require_api_key": true,
+      "timeout_s": 120,
+      "retries": 2,
+      "temperature": 0.0,
+      "max_tokens": 2048
+    },
+    "world": {
+      "mode": "llm",
+      "provider": "openai_compatible",
+      "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "model": "qwen-plus",
+      "api_key_env": "DASHSCOPE_API_KEY,ALIYUN_API_KEY",
+      "api_key_file": ".secrets/alicloud_api_key.txt",
+      "require_api_key": true,
+      "timeout_s": 120,
+      "retries": 2,
+      "temperature": 0.0,
+      "max_tokens": 2048
+    },
+    "evaluator": {
+      "mode": "llm",
+      "provider": "openai_compatible",
+      "base_url": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+      "model": "qwen-plus",
+      "api_key_env": "DASHSCOPE_API_KEY,ALIYUN_API_KEY",
+      "api_key_file": ".secrets/alicloud_api_key.txt",
+      "require_api_key": true,
+      "timeout_s": 120,
+      "retries": 2,
+      "temperature": 0.0,
+      "max_tokens": 2048
+    }
+  }
+}
