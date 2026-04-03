@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 from dataclasses import dataclass
 import json
 import os
@@ -335,18 +336,127 @@ class ChatCompletionClient:
 
 def extract_first_json_object(content: str) -> dict[str, Any]:
     text = content.strip()
-    start = text.find("{")
-    if start < 0:
+    if not text:
         raise ValueError("No JSON object found in model response.")
-    depth = 0
-    for idx, char in enumerate(text[start:], start=start):
-        if char == "{":
-            depth += 1
-        elif char == "}":
-            depth -= 1
-            if depth == 0:
-                return json.loads(text[start : idx + 1])
-    raise ValueError("Incomplete JSON object in model response.")
+
+    parsed = _parse_full_json_dict(text)
+    if parsed is None:
+        parsed = _parse_python_dict_literal(text)
+    if parsed is None:
+        parsed = _scan_for_json_dict(text)
+    if parsed is None:
+        parsed = _scan_for_python_dict(text)
+    if parsed is None:
+        raise ValueError("No JSON object found in model response.")
+    return _unwrap_response_envelope(parsed)
+
+
+def _parse_full_json_dict(text: str) -> dict[str, Any] | None:
+    try:
+        obj = json.loads(text)
+    except json.JSONDecodeError:
+        return None
+    if isinstance(obj, dict):
+        return obj
+    return None
+
+
+def _scan_for_python_dict(text: str) -> dict[str, Any] | None:
+    for idx, char in enumerate(text):
+        if char != "{":
+            continue
+        parsed = _parse_python_dict_literal(text[idx:])
+        if parsed is not None:
+            return parsed
+    return None
+
+
+def _scan_for_json_dict(text: str) -> dict[str, Any] | None:
+    decoder = json.JSONDecoder()
+    for idx, char in enumerate(text):
+        if char != "{":
+            continue
+        try:
+            obj, end = decoder.raw_decode(text[idx:])
+        except json.JSONDecodeError:
+            continue
+        if isinstance(obj, dict) and not text[idx + end :].strip():
+            return obj
+
+    for idx, char in enumerate(text):
+        if char != "{":
+            continue
+        try:
+            obj, _end = decoder.raw_decode(text[idx:])
+        except json.JSONDecodeError:
+            continue
+        if isinstance(obj, dict):
+            return obj
+    return None
+
+
+def _parse_python_dict_literal(text: str) -> dict[str, Any] | None:
+    if not text.startswith("{") or not text.endswith("}"):
+        return None
+    try:
+        obj = ast.literal_eval(text)
+    except (SyntaxError, ValueError):
+        return None
+    if isinstance(obj, dict):
+        return obj
+    return None
+
+
+def _unwrap_response_envelope(payload: dict[str, Any], max_depth: int = 4) -> dict[str, Any]:
+    current = payload
+    for _ in range(max_depth):
+        embedded = _extract_embedded_response_content(current)
+        if embedded is None:
+            return current
+        if isinstance(embedded, dict):
+            current = embedded
+            continue
+        embedded_text = _normalize_response_content(embedded)
+        if not embedded_text:
+            return current
+        next_payload = _parse_full_json_dict(embedded_text)
+        if next_payload is None:
+            next_payload = _parse_python_dict_literal(embedded_text)
+        if next_payload is None:
+            next_payload = _scan_for_json_dict(embedded_text)
+        if next_payload is None:
+            next_payload = _scan_for_python_dict(embedded_text)
+        if next_payload is None:
+            return current
+        current = next_payload
+    return current
+
+
+def _extract_embedded_response_content(payload: dict[str, Any]) -> Any | None:
+    choices = payload.get("choices")
+    if isinstance(choices, list):
+        for choice in choices:
+            if not isinstance(choice, dict):
+                continue
+            message = choice.get("message")
+            if isinstance(message, dict) and "content" in message:
+                return message["content"]
+            delta = choice.get("delta")
+            if isinstance(delta, dict) and "content" in delta:
+                return delta["content"]
+
+    data = payload.get("data")
+    if isinstance(data, dict) and "content" in data:
+        return data["content"]
+
+    message = payload.get("message")
+    if isinstance(message, dict) and "content" in message:
+        return message["content"]
+
+    if "content" in payload and any(key in payload for key in ("id", "model", "object", "role")):
+        return payload["content"]
+
+    return None
 
 
 def _normalize_response_content(content: Any) -> str:
