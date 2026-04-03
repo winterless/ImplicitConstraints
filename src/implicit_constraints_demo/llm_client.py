@@ -17,6 +17,7 @@ DEFAULT_ALIYUN_MODEL = "qwen-plus"
 DEFAULT_ALIYUN_API_KEY_FILE = ".secrets/alicloud_api_key.txt"
 DEFAULT_API_KEY_ENV_VARS = ("DASHSCOPE_API_KEY", "ALIYUN_API_KEY")
 DEFAULT_MAX_TOKENS = 2048
+INTERNAL_GATEWAY_PROVIDER = "internal_gateway"
 
 
 def _api_url(base_url: str, path: str) -> str:
@@ -90,12 +91,42 @@ class ModelResponseFormatError(ValueError):
         super().__init__(f"{message} Raw response preview: {preview}")
 
 
+def xxx(
+    *,
+    model_agent: str,
+    req_data: dict[str, Any],
+    sub_account_name: str,
+    model: str,
+    timeout: int,
+) -> dict[str, Any]:
+    user_prompt = ""
+    for message in req_data.get("messages", []):
+        if str(message.get("role", "")).strip().lower() == "user":
+            user_prompt = str(message.get("content", ""))
+            break
+    return {
+        "code": 0,
+        "message": "mock success",
+        "data": {
+            "provider": INTERNAL_GATEWAY_PROVIDER,
+            "model_agent": model_agent,
+            "sub_account_name": sub_account_name,
+            "model": model,
+            "timeout": timeout,
+            "content": f"[mock_xxx] model={model}, user={user_prompt[:120]}",
+            "request_data": req_data,
+        },
+    }
+
+
 class ChatCompletionClient:
     def __init__(
         self,
         provider: str = "openai_compatible",
         base_url: str = DEFAULT_ALIYUN_BASE_URL,
         model: str = DEFAULT_ALIYUN_MODEL,
+        model_agent: str = "",
+        sub_account_name: str = "",
         api_key: str = "",
         api_key_file: str = DEFAULT_ALIYUN_API_KEY_FILE,
         api_key_envs: tuple[str, ...] = DEFAULT_API_KEY_ENV_VARS,
@@ -111,13 +142,16 @@ class ChatCompletionClient:
             api_key_file=api_key_file,
             api_key_envs=api_key_envs,
         )
-        if require_api_key and not resolved_api_key:
+        normalized_provider = provider.strip().lower()
+        if require_api_key and normalized_provider != INTERNAL_GATEWAY_PROVIDER and not resolved_api_key:
             raise ValueError(
                 "Missing API key. Configure api_key, api_key_env, or api_key_file for this role."
             )
-        self.provider = provider.strip().lower()
+        self.provider = normalized_provider
         self.base_url = base_url
         self.model = model
+        self.model_agent = model_agent
+        self.sub_account_name = sub_account_name
         self.timeout_s = timeout_s
         self.retries = retries
         self.temperature = temperature
@@ -129,15 +163,21 @@ class ChatCompletionClient:
             self.headers["Authorization"] = f"Bearer {resolved_api_key}"
         if self.provider == "gemini":
             self._gemini_client = genai.Client(api_key=resolved_api_key)
-        elif self.provider not in {"openai_compatible", "local_openai_compatible"}:
+        elif self.provider not in {
+            "openai_compatible",
+            "local_openai_compatible",
+            INTERNAL_GATEWAY_PROVIDER,
+        }:
             raise ValueError(
                 f"Unsupported provider '{provider}'. Expected one of "
-                "'openai_compatible', 'local_openai_compatible', or 'gemini'."
+                f"'openai_compatible', 'local_openai_compatible', '{INTERNAL_GATEWAY_PROVIDER}', or 'gemini'."
             )
 
     def chat_completion(self, messages: list[dict[str, str]], *, max_tokens: int | None = None) -> str:
         if self.provider == "gemini":
             return self._chat_completion_gemini(messages, max_tokens=max_tokens)
+        if self.provider == INTERNAL_GATEWAY_PROVIDER:
+            return self._chat_completion_internal_gateway(messages, max_tokens=max_tokens)
         return self._chat_completion_openai_compatible(messages, max_tokens=max_tokens)
 
     def _chat_completion_openai_compatible(
@@ -209,6 +249,39 @@ class ChatCompletionClient:
                     continue
                 raise RuntimeError(f"Gemini API failed: {last_err}") from exc
         raise RuntimeError(last_err or "Gemini chat failed")
+
+    def _chat_completion_internal_gateway(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        max_tokens: int | None = None,
+    ) -> str:
+        req_data = {
+            "messages": messages,
+            "tools": None,
+            "model": self.model,
+            "max_tokens": max_tokens if max_tokens is not None else self.max_tokens,
+            "temperature": self.temperature,
+        }
+        timeout_ms = max(1, int(self.timeout_s * 1000))
+        last_err: str | None = None
+        for attempt in range(1, self.retries + 2):
+            try:
+                resp = xxx(
+                    model_agent=self.model_agent,
+                    req_data=req_data,
+                    sub_account_name=self.sub_account_name,
+                    model=self.model,
+                    timeout=timeout_ms,
+                )
+                return _normalize_response_content(_extract_internal_gateway_response_text(resp))
+            except Exception as exc:
+                last_err = str(exc)
+                if attempt <= self.retries:
+                    time.sleep(attempt)
+                    continue
+                raise RuntimeError(f"Internal gateway call failed: {last_err}") from exc
+        raise RuntimeError(last_err or "Internal gateway call failed")
 
     def chat_completion_json(
         self,
@@ -332,6 +405,19 @@ def _extract_gemini_response_text(response: Any) -> str:
             if part_text:
                 parts.append(str(part_text))
     return "\n".join(parts).strip()
+
+
+def _extract_internal_gateway_response_text(response: Any) -> str:
+    if isinstance(response, dict):
+        data = response.get("data")
+        if isinstance(data, dict):
+            content = data.get("content")
+            if content is not None:
+                return str(content)
+        content = response.get("content")
+        if content is not None:
+            return str(content)
+    return str(response).strip()
 
 
 def _truncate_for_repair(text: str, limit: int = 4000) -> str:

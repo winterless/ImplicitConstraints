@@ -24,6 +24,8 @@ class RoleRuntimeConfig:
     provider: str = "openai_compatible"
     base_url: str = DEFAULT_ALIYUN_BASE_URL
     model: str = DEFAULT_ALIYUN_MODEL
+    model_agent: str = ""
+    sub_account_name: str = ""
     api_key_env: str = "DASHSCOPE_API_KEY,ALIYUN_API_KEY"
     api_key_file: str = DEFAULT_ALIYUN_API_KEY_FILE
     require_api_key: bool = True
@@ -139,6 +141,8 @@ def _load_role_config(
         provider=str(section.get("provider", defaults.provider)),
         base_url=str(section.get("base_url", defaults.base_url)),
         model=str(section.get("model", defaults.model)),
+        model_agent=str(section.get("model_agent", defaults.model_agent)),
+        sub_account_name=str(section.get("sub_account_name", defaults.sub_account_name)),
         api_key_env=str(section.get("api_key_env", defaults.api_key_env)),
         api_key_file=str(section.get("api_key_file", defaults.api_key_file)),
         require_api_key=bool(section.get("require_api_key", defaults.require_api_key)),
