@@ -518,16 +518,44 @@ def _extract_gemini_response_text(response: Any) -> str:
 
 
 def _extract_internal_gateway_response_text(response: Any) -> str:
-    if isinstance(response, dict):
-        data = response.get("data")
+    parsed_response = _coerce_internal_gateway_payload(response)
+    if isinstance(parsed_response, dict):
+        choices = parsed_response.get("choices")
+        if isinstance(choices, list):
+            for choice in choices:
+                if not isinstance(choice, dict):
+                    continue
+                message = choice.get("message")
+                if isinstance(message, dict) and "content" in message:
+                    return _normalize_response_content(message["content"])
+                delta = choice.get("delta")
+                if isinstance(delta, dict) and "content" in delta:
+                    return _normalize_response_content(delta["content"])
+
+    if isinstance(parsed_response, dict):
+        data = parsed_response.get("data")
         if isinstance(data, dict):
             content = data.get("content")
             if content is not None:
                 return str(content)
-        content = response.get("content")
+        content = parsed_response.get("content")
         if content is not None:
             return str(content)
-    return str(response).strip()
+    return _normalize_response_content(parsed_response)
+
+
+def _coerce_internal_gateway_payload(response: Any) -> Any:
+    if isinstance(response, str):
+        text = response.strip()
+        if not text:
+            return ""
+        parsed = _parse_full_json_dict(text)
+        if parsed is None:
+            parsed = _parse_python_dict_literal(text)
+        if parsed is not None:
+            return parsed
+        return text
+    return response
 
 
 def _truncate_for_repair(text: str, limit: int = 4000) -> str:
