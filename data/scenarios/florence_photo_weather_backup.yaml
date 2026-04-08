@@ -1,141 +1,109 @@
+# evaluation_profile: llm_only
+# LLM 评测仅使用 implicit_eval_points（见 evaluator._build_evaluator_user_prompt）；不依赖 hidden_constraints / execution_rules / evaluation_rubric。
+# 本题主题为练球湖网球场预订；文件名/ id 为历史沿用。
 id: florence_photo_weather_backup
 category: implicit_reasoning
-user_prompt: 明天佛罗伦萨市中心拍摄，晴就找工作室旁步行咖啡馆，雨就取消。
-original_question: 我计划明天下午在意大利佛罗伦萨的市中心进行户外人像拍摄。请先帮我查询佛罗伦萨的天气情况。如果天气晴朗，我需要几家离我租的工作室步行距离内的咖啡馆；如果有降雨，则考虑取消或改期。
-tool_category: weather_backup_booking
-implicit_reason: 用户不是单纯查天气，而是要基于天气分支决定拍摄方案。系统需要先判断明天下午是否适合户外拍摄，再在晴天分支准备室内备选地点，在降雨分支处理取消动作，避免继续沿用原计划。
-hidden_constraints:
-  - 需要先判断明天下午是否适合户外拍摄，而不是直接搜咖啡馆。
-  - 晴天分支需要给出工作室步行范围内的室内备选地点。
-  - 雨天分支需要检查预订是否可取消以及取消成本。
-  - 最终动作应与天气分支一致，不能同时推进互斥方案。
-  - 仅靠候选列表不足以完成取消前核查；若进入取消分支，应显式读取单条预订状态或等价详情。
+user_prompt: 帮我订个明天下午4点练球湖附近的网球场。
+
+implicit_reason: 用户表面是「订场」，但必须先查明天天气才知道是否适合露天场。全天阴雨时，前两处便宜且近的球场为露天，不宜再当首选；后两处为室内，但第三处下午4点档已满，第四处该时段可订却距离最远。合理结论应体现「先天气、再区分露天/室内、再在可订时段内权衡距离与价格」，而不是只看距离或只看低价。
+
+# 三条隐含考点（LLM 评测时应逐条给出 passed + reasoning）；天气与场地字段以轨迹与 final_world_state 为准。
+implicit_eval_points:
+  - >
+    【先查天气】是否先查询明日练球湖附近（或用户所指区域）的天气，再讨论订场；只有查了工具返回才会知道全天阴雨。若未查天气就按晴天逻辑主推前两处露天场，判弱不满足。
+  - >
+    【露天与室内】是否结合阴雨天气，区分前两处为露天、后两处为室内，并在雨天避免把露天场当作与需求一致的首选（除非用户明确冒雨）；若仍只推荐最近、最便宜的露天场而忽略室内选项，判弱不满足。
+  - >
+    【室内时段与权衡】是否注意到第三处室内场在 16:00 档已满、第四处室内场该时段仍可订但为四处中最远；能否据此给出可执行结论（如仅第四处满足「明天下午4点+室内」）并说明距离/价格权衡，而非虚构已订场或忽略满档事实。
+
 suggested_plan:
-  - 查询佛罗伦萨明天下午的天气。
-  - 查询当前工作室预订的取消条件。
-  - 若天气适合则查找步行咖啡馆，若天气不适合则取消预订。
+  - 查询明日练球湖片区天气，确认是否阴雨。
+  - 检索练球湖附近网球场，区分露天/室内、价格、距离及目标时段余位。
+  - 在阴雨条件下优先室内可订时段；向用户说明唯一可选或需改时间/接受距离等。
+
 sample_result:
   tool_trace:
     - step: 1
       tool: device:weather.get_forecast
       arguments:
-        location: Florence Historic Center
+        location: 练球湖片区
         date: "2026-04-19"
-        time_range: "14:00-18:00"
+        time_range: "08:00-22:00"
       expected_observation: >
-        明天下午拍摄窗口内为重雨、概率与降水量都很高，不适合按计划做户外人像。
+        明日全天阴雨（或多段降水），不宜再默认适合露天练球。
     - step: 2
-      tool: device:booking.get_booking_status
+      tool: device:maps.search_nearby_places
       arguments:
-        booking_id: studio_441
+        origin: 练球湖
+        place_type: tennis_court
       expected_observation: >
-        工作室预订仍在确认状态，且在取消截止时间前可免费取消，取消费为 0。
-    - step: 3
-      tool: device:booking.cancel_booking
-      arguments:
-        booking_id: studio_441
-      expected_observation: >
-        预订成功取消，后续状态应变为已取消，避免继续为不适合外拍的天气付费占用档期。
+        返回四处场地：前两处露天、较近且价低；两处室内，第三处 indoor 在 16:00 无档，第四处 indoor 该时段可订且步行距离最大。
   final_answer: >
-    明天下午佛罗伦萨市中心预报为重雨，不适合按原计划做户外人像拍摄。
-    你的工作室预订在截止前可免费取消，我已走取消流程，不再继续推进「晴天找咖啡馆」分支。
-    若仍想拍，建议整体改期到气象条件更稳的半天，再重新评估户外与室内备选。
+    明天练球湖一带全天阴雨，前两处露天场虽近且便宜，但不适合作为优先选择。
+    两处室内里，只有最远的第四处在明天下午 4 点仍有空档；第三处室内该时段已满。若必须坚持此时段与室内，只能接受更远距离；否则可改时段或改期。
+
 max_steps: 6
 allowed_tools:
   - device:weather.get_forecast
   - device:maps.search_nearby_places
-  - device:booking.get_booking_status
-  - device:booking.cancel_booking
-  - device:booking.list_upcoming_bookings
-  - device:reservations.get_details
-  - device:reservations.cancel
-  - device:travel.get_trip_brief
   - device:schedule.get_next_event
   - device:schedule.list_free_slots
   - device:reminder.create
   - device:weather.check_weather
   - device:temperature.check
-  - device:alarm.create
-  - device:photos.search_by_metadata
-  - device:photos.prepare_share_bundle
-  - device:chat.get_group_context
-  - device:messaging.open_contact_thread
-  - device:note.search
-  - device:power.get_battery_status
-  - device:events.get_venue_details
-  - device:note.open
-  - device:power.freeze_background_apps
-  - device:power.apply_saving_plan
   - device:profile.get_user_labels
+  - device:note.search
   - device:timer.create
+
 world:
   context:
     date: "2026-04-18"
-    local_time: "19:40"
-    city: Florence
-    destination_hint: Via dei Parmigiani 12
+    local_time: "20:15"
+    city: 杭州
+    destination_hint: 练球湖
     scenario_source: query_top100_batch1
     source_query_id: seed_dataset_turn_e_part3.jsonl#178
   state:
-    bookings:
-      current:
-        booking_id: studio_441
-        status: confirmed
-        refundable: true
     tool_responses:
       weather.get_forecast:
         forecast:
-          location: Florence Historic Center
+          location: 练球湖片区
           date: "2026-04-19"
-          time_range: "14:00-18:00"
-          condition: heavy_rain
-          rain_probability: 88
-          expected_precip_mm: 9
-          wind_level: moderate
+          time_range: "08:00-22:00"
+          condition: drizzle
+          rain_probability: 75
+          periods:
+            - time_range: "08:00-12:00"
+              condition: light_rain
+            - time_range: "12:00-18:00"
+              condition: drizzle
+            - time_range: "18:00-22:00"
+              condition: drizzle
       maps.search_nearby_places:
         places:
-          - name: Caffe del Centro
-            walk_minutes: 4
-            category: cafe
-          - name: Studio Bistro
-            walk_minutes: 6
-            category: cafe
-      booking.get_booking_status:
-        booking:
-          booking_id: studio_441
-          venue_name: Via dei Parmigiani 12 daylight studio
-          status: confirmed
-          refundable: true
-          cancellation_deadline: "2026-04-19 10:00"
-          cancellation_fee: 0
-      booking.cancel_booking:
-        cancelled: true
-        booking_id: studio_441
-    tool_state_updates:
-      booking.cancel_booking:
-        bookings:
-          current:
-            booking_id: studio_441
-            status: cancelled
-            refundable: false
-execution_rules:
-  - 必须先检查天气，再决定继续准备备选地点还是取消预订。
-  - 若天气明显不适合户外拍摄，应优先处理取消或改期分支。
-  - 取消前必须检查预订状态和取消条件。
-  - 在已判定明日午后明显不适外拍时，不得把步行咖啡馆搜索当作与天气分支一致的主要结果；若走取消分支，须先完成预订状态核查再取消。
-  - `booking.list_upcoming_bookings` 只用于定位目标预订，不能单独充当取消条件核查。
-evaluation_rubric:
-  - criterion: The agent checked the weather forecast.
-    check:
-      type: action_called
-      tool: device:weather.get_forecast
-  - criterion: The agent inspected booking status before cancelling.
-    check:
-      type: action_before
-      first: device:booking.get_booking_status
-      second: device:booking.cancel_booking
-  - criterion: The booking was cancelled in final state.
-    check:
-      type: state_eq
-      path: bookings.current.status
-      value: cancelled
+          - place_id: court_out_01
+            name: 练球湖北岸网球角
+            category: tennis_court
+            court_surface: outdoor
+            walk_minutes_from_lake: 3
+            price_hint_cny: 80
+          - place_id: court_out_02
+            name: 练球湖东岸快捷网球场
+            category: tennis_court
+            court_surface: outdoor
+            walk_minutes_from_lake: 5
+            price_hint_cny: 90
+          - place_id: court_in_01
+            name: 湖心室内网球中心
+            category: tennis_court
+            court_surface: indoor
+            walk_minutes_from_lake: 8
+            price_hint_cny: 200
+            slot_16_00_available: false
+          - place_id: court_in_02
+            name: 滨湖室内网球馆
+            category: tennis_court
+            court_surface: indoor
+            walk_minutes_from_lake: 22
+            price_hint_cny: 240
+            slot_16_00_available: true

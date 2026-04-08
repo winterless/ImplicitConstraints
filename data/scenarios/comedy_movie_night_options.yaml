@@ -1,121 +1,212 @@
+# evaluation_profile: llm_only
+# LLM 评测仅使用 implicit_eval_points；不依赖 hidden_constraints / execution_rules / evaluation_rubric。
 id: comedy_movie_night_options
 category: implicit_reasoning
-user_prompt: 现在有什么喜剧电影在上映？
-original_question: I'm planning a movie night with friends and we're interested in comedic films. Are there any current movie options that match this criteria?
-tool_category: 影视选择与群体偏好
-implicit_reason: 用户表面上是在问“现在有什么喜剧片”，但真实目标是为一场多人电影夜挑出合适、当前可看的候选。模型需要把“当前”“喜剧”“适合朋友一起看”拆成证据链，而不是只列出泛化片名。
-hidden_constraints:
-  - “现在”要求候选具备当前可看性，而不是历史老片清单。
-  - “movie night with friends” 暗含群体偏好，需要避免过长、过冷门或已看过的片子。
-  - 仅有喜剧标签不够，应综合群聊上下文和观看历史做筛选。
-  - 正确结果应给出少量更适合当晚观看的候选，而不是笼统罗列。
+user_prompt: 今天有什么建议去影院看的电影
+
+implicit_reason: 用户要的是「今天去哪看、看什么」的可执行建议。需要先有**近期口碑/影评排行**作基准，并检索足够多**候选影院**做对比；但本题世界条件下**驾车约一小时内可达的影院只有一家**，其余门店均更远。口碑榜前列的多部影片中，常有**部分高排位影片在这家最近影院根本没有排片**，须向用户说清「近处能看什么 / 想看榜首需跑多远」。在「当前至深夜」场次约束下，宜给出**约三部层次的推荐**（如 Top3 式：优先近处可实现的排序，并单独说明榜首若坚持要看应去的远店），而不是只推一部或假装近处能看所有热榜片。
+
+implicit_eval_points:
+  - >
+    【影评/口碑榜依据】是否引用近期影院侧或平台侧的口碑/评分排行（如 note.search、media.search_recommendations 或等价），作为排序基础；若完全无榜单依据、仅主观点名，判弱不满足。
+  - >
+    【一小时内仅一家 + 更远候选】是否结合 maps 类证据识别：**约一小时内可达的影院只有一家**，其余候选影院单程明显超过 60 分钟（或等价阈值），并据此区分「近」与「远」；若仍写成多家均在 1 小时内，判不满足。
+  - >
+    【近店缺片】是否点明：口碑榜前列中**至少部分影片在这家最近影院无排片/不可购**，不能假装近处能看所有热榜片；若忽略缺片事实、仍把仅在远店上映的榜首当作近处首选，判弱不满足。
+  - >
+    【当日深夜前场次】是否结合 context 当前时刻，说明从「现在」到当天深夜/末场在各店的可购场次差异（尤其近店 vs 远店）。
+  - >
+    【Top3 式综合推荐】是否在综合排行、路程与场次后，给出**多部、分优先级的建议**（例如近处可实现的榜二、榜三、榜五 + 若要看榜一应去的远店与代价），而非只给单一片名或无序罗列。
+
 suggested_plan:
-  - 读取群聊上下文，理解朋友对电影夜的偏好。
-  - 查询近期观看历史，避免重复推荐。
-  - 检索当前可看的喜剧向候选并筛选。
+  - 查本周口碑/热映排行（条目宜足够多，便于对比缺片）。
+  - 检索候选影院并核对各家 ETA，标出**唯一**一家 1 小时内可达店及其余远店。
+  - 对照排片：哪些榜前列仅在远店、近店缺片。
+  - 给出分优先级的多条推荐（含「坚持看榜首」的远店方案）。
+
 sample_result:
   tool_trace:
     - step: 1
-      tool: device:chat.get_group_context
+      tool: device:note.search
       arguments:
-        group_name: Friday Movie Night
+        query: 影院 本周 口碑 排行 评分
       expected_observation: >
-        群聊要求时长控制在约两小时内、不要过黑幽默、希望今晚就能方便流媒体观看。
+        获得较长榜单（如 Top6）：霓虹旧事、周末特攻、小城之春、午夜快递、深海灯、逆光行人等，作排序锚点。
     - step: 2
-      tool: device:media.get_watch_history
-      arguments: {}
-      expected_observation: >
-        近期看过 Game Night、Palm Springs 等，与本次推荐列表需去重。
-    - step: 3
-      tool: device:media.search_recommendations
+      tool: device:maps.search_nearby_places
       arguments:
-        genre: comedy
-        available_now: true
+        origin: 当前位置
+        place_type: movie_theater
       expected_observation: >
-        候选含 Hit Man、Quiz Lady、Joy Ride、The Death of Stalin 等；后者偏 dark comedy 与群聊偏好冲突。
+        返回多家候选影院及 ETA；其中仅星光国际（静安）约 28 分钟在 1 小时内，其余均显著超过 60 分钟，形成「近单店 + 多远店」格局。
+    - step: 3
+      tool: device:maps.get_routes
+      arguments:
+        destination: 星光国际影城（静安店）
+        departure_time: "19:25"
+      expected_observation: >
+        驾车约 28 分钟，确认属 1 小时内唯一合理选择；若查榜一片《霓虹旧事》需改目的地为 70 分钟以上的远店。
+    - step: 4
+      tool: device:note.open
+      arguments:
+        note_id: showtimes_bundle_0418
+      expected_observation: >
+        排片摘要显示：近店无《霓虹旧事》《午夜快递》排片；远店（如百丽宫、SFC）才有榜首或特定片。
   final_answer: >
-    结合群聊「两小时以内、别太阴暗、今晚好播」的约束，并排除未看过且偏轻松的喜剧后，
-    优先推荐 **Quiz Lady**（约 99 分钟）或 **Joy Ride**（约 95 分钟），时长合适、标签为喜剧且当前可看。
-    **Hit Man** 也可作为略长一点的备选；**The Death of Stalin** 偏黑色幽默，不太符合「不要 super dark」这条，建议暂不选。
-max_steps: 5
+    本周口碑 Top3 是《霓虹旧事》《周末特攻》《小城之春》。你驾车 1 小时内只有星光国际（静安）一家，这家店**今天没有《霓虹旧事》和《午夜快递》**，但有《周末特攻》《小城之春》《深海灯》等场次到深夜。
+    **近处优先推荐**：①《周末特攻》21:00 ②《小城之春》22:10 ③《深海灯》23:20（按口碑与场次衔接排）。
+    **若一定要看榜首《霓虹旧事》**：只能去约 72 分钟的兴业百丽宫等远店，并接受路程成本。
+
+max_steps: 8
 allowed_tools:
-  - device:chat.get_group_context
-  - device:media.get_watch_history
+  - device:note.search
+  - device:note.open
+  - device:maps.search_nearby_places
+  - device:maps.get_routes
+  - device:maps.get_navigation_status
   - device:media.search_recommendations
+  - device:media.get_watch_history
   - device:profile.get_user_labels
-  - device:media.open_on_tv
-  - device:podcasts.list_unheard
-  - device:podcasts.play_episode
   - device:schedule.list_free_slots
+  - device:schedule.get_next_event
   - device:reminder.create
   - device:timer.create
-  - device:note.search
-  - device:schedule.get_next_event
-  - device:note.open
   - device:alarm.create
+
 world:
   context:
     date: "2026-04-18"
     local_time: "19:25"
-    city: San Francisco
+    city: Shanghai
+    user_location_label: 当前位置（静安寺附近）
     scenario_source: query_top100_batch4
     source_query_id: seed_dataset_turn_e_part3.jsonl#159
   state:
-    group_chat:
-      name: Friday Movie Night
-      participants:
-        - Maya
-        - Chris
-        - Leo
     tool_responses:
-      chat.get_group_context:
-        group:
-          name: Friday Movie Night
-          participants:
-            - Maya
-            - Chris
-            - Leo
-          recent_messages:
-            - "Let's keep it under two hours this time."
-            - "No super dark humor please."
-            - "Would love something recent and easy to stream tonight."
-      media.get_watch_history:
-        watch_history:
-          - title: Game Night
-            watched_at: "2026-04-05"
-            user_rating: 4
-          - title: Palm Springs
-            watched_at: "2026-03-28"
-            user_rating: 5
+      note.search:
+        notes:
+          - note_id: cinema_chart_2026w16
+            title: 本周本地影院口碑热映榜（摘录）
+            body: |
+              1.《霓虹旧事》 综合 9.1
+              2.《周末特攻》 8.9
+              3.《小城之春》 8.7
+              4.《午夜快递》 8.4
+              5.《深海灯》 8.2
+              6.《逆光行人》 8.0
+              更新：2026-04-18。
+          - note_id: showtimes_bundle_0418
+            title: 多店今日深夜前场次与近店缺片说明
+            body: |
+              【驾车约1小时内仅星光国际（静安）】本场今日排片：周末特攻 20:00/21:00，小城之春 22:10，深海灯 23:20，末场 00:30；无霓虹旧事、无午夜快递。
+              百丽宫兴业（驾车约72分）：霓虹旧事 20:50/22:40，小城之春 21:30。
+              SFC徐汇（约85分）：周末特攻 19:50/22:20，午夜快递 23:50。
+              万象虹桥（约95分）：片单较全，霓虹旧事 22:30，末场 00:40。
+      maps.search_nearby_places:
+        places:
+          - place_id: cine_star_jingan
+            name: 星光国际影城（静安店）
+            category: movie_theater
+            district: 静安
+            drive_eta_minutes: 28
+            transit_eta_minutes: 35
+            within_one_hour_drive: true
+            chart_titles_playing_tonight:
+              - 周末特攻
+              - 小城之春
+              - 深海灯
+            chart_titles_not_playing_here:
+              - 霓虹旧事
+              - 午夜快递
+              - 逆光行人
+          - place_id: cine_palace_xingye
+            name: 百丽宫影城（兴业太古汇）
+            category: movie_theater
+            district: 南京西路
+            drive_eta_minutes: 72
+            transit_eta_minutes: 78
+            within_one_hour_drive: false
+            chart_titles_playing_tonight:
+              - 霓虹旧事
+              - 小城之春
+          - place_id: cine_sfc
+            name: SFC上影影城（徐汇店）
+            category: movie_theater
+            district: 徐汇
+            drive_eta_minutes: 85
+            transit_eta_minutes: 88
+            within_one_hour_drive: false
+            chart_titles_playing_tonight:
+              - 周末特攻
+              - 午夜快递
+          - place_id: cine_mixc
+            name: 万象影城（虹桥）
+            category: movie_theater
+            district: 虹桥
+            drive_eta_minutes: 95
+            transit_eta_minutes: 102
+            within_one_hour_drive: false
+            chart_titles_playing_tonight:
+              - 霓虹旧事
+              - 小城之春
+              - 深海灯
+          - place_id: cine_wanda_qingpu
+            name: 万达影城（青浦店）
+            category: movie_theater
+            district: 青浦
+            drive_eta_minutes: 68
+            transit_eta_minutes: 95
+            within_one_hour_drive: false
+            chart_titles_playing_tonight:
+              - 逆光行人
+      maps.get_routes:
+        destination: 星光国际影城（静安店）
+        departure_time: "19:25"
+        routes:
+          - route_id: r1
+            label: 驾车
+            eta_minutes: 28
+            traffic_level: moderate
+      note.open:
+        note:
+          note_id: showtimes_bundle_0418
+          title: 多店今日深夜前场次与近店缺片说明
+          body: |
+            【驾车约1小时内仅星光国际（静安）】本场今日排片：周末特攻 20:00/21:00，小城之春 22:10，深海灯 23:20，末场 00:30；无霓虹旧事、无午夜快递。
+            百丽宫兴业（驾车约72分）：霓虹旧事 20:50/22:40，小城之春 21:30。
+            SFC徐汇（约85分）：周末特攻 19:50/22:20，午夜快递 23:50。
+            万象虹桥（约95分）：片单较全，霓虹旧事 22:30，末场 00:40。
       media.search_recommendations:
         recommendations:
-          - title: Hit Man
+          - title: 霓虹旧事
             tags:
-              - comedy
-              - crime
-            runtime_minutes: 116
-            available_now: true
-            previously_watched: false
-          - title: Quiz Lady
+              - drama
+              - theatrical_wide
+            critic_score_chart: 9.1
+            runtime_minutes: 118
+          - title: 周末特攻
             tags:
+              - action
               - comedy
+            critic_score_chart: 8.9
+            runtime_minutes: 112
+          - title: 小城之春
+            tags:
+              - romance
+            critic_score_chart: 8.7
+            runtime_minutes: 105
+          - title: 午夜快递
+            tags:
+              - thriller
+            critic_score_chart: 8.4
             runtime_minutes: 99
-            available_now: true
-            previously_watched: false
-          - title: Joy Ride
+          - title: 深海灯
             tags:
-              - comedy
-            runtime_minutes: 95
-            available_now: true
-            previously_watched: false
-          - title: The Death of Stalin
+              - family
+            critic_score_chart: 8.2
+            runtime_minutes: 102
+          - title: 逆光行人
             tags:
-              - dark_comedy
-            runtime_minutes: 107
-            available_now: true
-            previously_watched: false
-execution_rules:
-  - 应先利用群聊上下文识别多人电影夜的隐含偏好。
-  - 应考虑观看历史，避免推荐已看过的片子。
-  - 推荐结果应聚焦当前可看、偏轻松、时长适中的喜剧候选。
-evaluation_rubric: []
+              - indie
+            critic_score_chart: 8.0
+            runtime_minutes: 96

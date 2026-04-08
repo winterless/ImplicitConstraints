@@ -1,95 +1,110 @@
+# evaluation_profile: llm_only
+# LLM 评测仅使用 implicit_eval_points（见 evaluator._build_evaluator_user_prompt）；不依赖 hidden_constraints / execution_rules / evaluation_rubric。
+# scenario id 含 family 为历史沿用；本题 user 诉求以「老板电话」为主。
 id: focus_two_hours_family_boss_whitelist
 category: implicit_reasoning
-user_prompt: 帮我开启两个小时的专注模式，只允许家人和老板的消息或来电打扰我。
-original_question: 让我专心写两个小时报告，除了家人和老板谁也别烦我。
-tool_category: focus_notifications
-implicit_reason: 用户不是单纯想要一个计时器，而是要一个带白名单策略的免打扰流程。系统需要先建立两个小时的持续窗口，再从通讯录或标签中提取“家人”和“老板”集合，并把其他通知、来电和消息静音或延后显示。
-hidden_constraints:
-- 必须有明确的两小时持续时长。
-- 白名单应基于联系人标签、关系或用户已标注身份。
-- 默认静音对象是“除白名单外的所有人和应用”。
-- 不应误拦截来自家人和老板的高优先级通知。
+user_prompt: 今天要和老板电话沟通方案，不要让别人打扰我。
+
+implicit_reason: 用户表面要「不被打扰」，真实目标是在与老板通话/沟通方案时避免无关通知与来电打断。宜先结合日程弄清沟通大致起止，再建立与之匹配的专注/勿扰边界；并从标签或联系人关系中识别老板，使老板侧可穿透。沟通结束后应恢复正常通知（或明确如何结束勿扰），避免无限期静音。其余人应在沟通时段内被抑制或延后；若标签里还有家人等分组可合理取舍，但**绝不能**把老板挡在免打扰之外。
+
+# 三条隐含考点（LLM 评测时应逐条给出 passed + reasoning）；字段以轨迹与 final_world_state 为准。
+implicit_eval_points:
+  - >
+    【日程对齐与沟通后恢复】是否先查看当日/近期日程（如 schedule.get_next_event）或等价信息，识别「与老板沟通方案」的大致时间段，再让专注会话时长或勿扰范围与之合理匹配（而非随口设一个分钟数）。沟通结束后是否说明或落实「恢复常规通知」：例如依赖专注会话到期、提醒用户手动关闭勿扰、或设置恢复类闹钟/提醒；若完全不看日程、也不交代沟通结束后如何取消静音/恢复通知，判弱不满足。
+  - >
+    【老板身份与白名单依据】是否通过 profile.get_user_labels（或等价）识别老板相关标签/分组，再配置通知策略；若未基于标签或关系、凭空指定号码，或配置后老板仍被抑制，判不满足。
+  - >
+    【非老板要静音】白名单之外的人：来电与消息是否会被静音、延后或不再默认弹窗（与 notifications 策略中「仅老板可打扰、其余抑制」一致）。若嘴上说不让别人打扰，策略上却仍允许所有联系人正常打断，判弱不满足。
+
 suggested_plan:
-- 创建两个小时的专注会话。
-- 提取家人和老板联系人，生成白名单。
-- 将其他通知静音，并在会话结束后自动恢复。
+  - 查看日程中与老板沟通方案的时间段（若有）。
+  - 读取用户标签，确认老板（及可选家人）分组。
+  - 启动与沟通时长匹配的专注会话，并设置通知：仅老板可打扰，其余抑制。
+  - 说明沟通结束后如何恢复正常通知（会话结束、手动关闭或提醒）。
+
 sample_result:
   tool_trace:
     - step: 1
+      tool: device:schedule.get_next_event
+      arguments: {}
+      expected_observation: >
+        日程中有「与老板电话沟通方案」条目及起止时间，可与专注时长、勿扰范围对齐。
+    - step: 2
       tool: device:profile.get_user_labels
       arguments: {}
       expected_observation: >
-        标签中应能解析出「家人」与「老板」对应的联系人分组或关系标记，用作白名单依据。
-    - step: 2
+        能解析出 contact_group_boss 等标签，作为老板白名单依据（亦可同时看到家人等分组，由推理决定是否并入放行）。
+    - step: 3
       tool: device:focus.start_session
       arguments:
-        duration_minutes: 120
-        label: 报告撰写专注
+        duration_minutes: 60
+        label: 与老板电话沟通方案
       expected_observation: >
-        专注会话创建成功，持续约两小时，为后续通知策略提供时间边界。
-    - step: 3
+        专注会话时长与日程中的沟通窗口大致一致（示例为 60 分钟）；结束后可恢复或依赖会话到期。
+    - step: 4
       tool: device:notifications.set_delivery_policy
       arguments:
         mode: allowlist
         allowed_relationships:
-          - family
           - boss
         suppress_others: true
       expected_observation: >
-        非白名单来电与消息被抑制或延后，仅家人与老板可穿透打扰。
+        仅老板关系可穿透，其余通知被抑制或延后；与「不要让别人打扰」一致。
   final_answer: >
-    已为你开启约两小时的专注会话，并把通知策略切成白名单模式：只放行家人与老板的消息或来电，其余一律静音或延后展示。
-    会话结束后再恢复常规通知，避免误拦高优先级联系人。
+    已按日程里的沟通时段开启专注，并设为仅老板可打扰；其他人来电与消息会静音或延后。沟通结束后专注会话到期即恢复常规通知，你也可以在控制中心手动关闭勿扰。
+
 max_steps: 6
 allowed_tools:
-- device:focus.start_session
-- device:notifications.set_delivery_policy
-- device:alarm.create
-- device:alarm.check
-- device:alarm.cancel
-- device:reminder.create
-- device:reminder.check
-- device:schedule.get_next_event
-- device:schedule.list_free_slots
-- device:profile.get_user_labels
-- device:note.search
-- device:note.open
-- device:power.get_battery_status
-- device:weather.get_forecast
-- device:travel.get_trip_brief
-- device:weather.check_weather
-- device:power.freeze_background_apps
-- device:power.apply_saving_plan
-- device:timer.create
+  - device:focus.start_session
+  - device:notifications.set_delivery_policy
+  - device:alarm.create
+  - device:alarm.check
+  - device:alarm.cancel
+  - device:reminder.create
+  - device:reminder.check
+  - device:schedule.get_next_event
+  - device:schedule.list_free_slots
+  - device:profile.get_user_labels
+  - device:note.search
+  - device:note.open
+  - device:power.get_battery_status
+  - device:weather.get_forecast
+  - device:travel.get_trip_brief
+  - device:weather.check_weather
+  - device:power.freeze_background_apps
+  - device:power.apply_saving_plan
+  - device:timer.create
+
 world:
   context:
-    date: '2026-03-19'
-    local_time: '18:10'
+    date: "2026-03-19"
+    local_time: "18:10"
     city: Seattle
     destination_hint: Home
     scenario_source: mobile_implicit_cases_zh
   state:
     calendar:
       next_event:
-        title: Upcoming task
-        start_time: '19:30'
+        title: 与老板电话沟通方案
+        start_time: "2026-03-19 19:30"
+        end_time: "2026-03-19 20:30"
         location: Home
-        boarding_buffer_minutes: 30
+        boarding_buffer_minutes: 0
     maps:
       routes_by_destination:
         Home:
-        - route_id: route_fast
-          label: Fast route
-          distance_km: 18
-          eta_minutes: 22
-          traffic_level: moderate
-          tolls: false
-        - route_id: route_safe
-          label: Safer route
-          distance_km: 21
-          eta_minutes: 28
-          traffic_level: light
-          tolls: true
+          - route_id: route_fast
+            label: Fast route
+            distance_km: 18
+            eta_minutes: 22
+            traffic_level: moderate
+            tolls: false
+          - route_id: route_safe
+            label: Safer route
+            distance_km: 21
+            eta_minutes: 28
+            traffic_level: light
+            tolls: true
     navigation:
       active_destination: null
       active_route_id: null
@@ -99,25 +114,19 @@ world:
     tool_responses:
       profile.get_user_labels:
         labels:
-          - focus_report_writing
-          - contact_group_family
           - contact_group_boss
+          - contact_group_family
+          - work_project_alpha
       focus.start_session:
         session:
-          session_id: focus_sess_120
-          duration_minutes: 120
-          label: 报告撰写专注
+          session_id: focus_sess_060
+          duration_minutes: 60
+          label: 与老板电话沟通方案
           started: true
       notifications.set_delivery_policy:
         policy:
           mode: allowlist
           allowed_relationships:
-            - family
             - boss
           suppress_others: true
           applied: true
-execution_rules:
-- 必须先有明确的两小时持续时长（专注会话或等价计时），再配置通知白名单。
-- 白名单必须基于联系人标签、关系或用户已标注身份解析出「家人」「老板」集合，不得凭空猜测号码。
-- 默认静音对象是除白名单外的其余人与应用通知；配置后不得把家人与老板一并静音。
-evaluation_rubric: []

@@ -9,6 +9,29 @@ from .llm_client import ChatCompletionClient
 from .schemas import Scenario
 
 
+def _build_evaluation_summary(
+    passed_count: int,
+    total: int,
+    *,
+    overall_passed: bool | None = None,
+    overall_reasoning: str = "",
+) -> dict[str, Any]:
+    """Per-scenario summary: normalized = 小项对/小项总; binary = 全对 1 否则 0."""
+    if overall_passed is None:
+        overall_passed = total > 0 and passed_count == total
+    normalized = round(passed_count / total, 3) if total else 0.0
+    binary = 1.0 if total > 0 and passed_count == total else 0.0
+    return {
+        "passed_all": overall_passed,
+        "passed_count": passed_count,
+        "total_count": total,
+        "scenario_pass_rate": 1.0 if overall_passed else 0.0,
+        "normalized_scenario_score": normalized,
+        "binary_scenario_score": binary,
+        "overall_reasoning": overall_reasoning,
+    }
+
+
 class BaseScenarioEvaluator(ABC):
     @property
     @abstractmethod
@@ -54,13 +77,7 @@ class DeterministicScenarioEvaluator(BaseScenarioEvaluator):
         total = len(results)
         return {
             "evaluation_results": results,
-            "summary": {
-                "passed_all": passed_count == total,
-                "passed_count": passed_count,
-                "total_count": total,
-                "scenario_pass_rate": 1.0 if passed_count == total else 0.0,
-                "normalized_scenario_score": round(passed_count / total, 3) if total else 0.0,
-            },
+            "summary": _build_evaluation_summary(passed_count, total),
         }
 
     def _evaluate_item(
@@ -273,14 +290,13 @@ def _normalize_llm_evaluation(parsed: dict[str, Any]) -> dict[str, Any]:
         overall_passed = passed_count == total
     overall_reasoning = str(parsed.get("overall_reasoning", "")).strip()
 
+    summary = _build_evaluation_summary(
+        passed_count,
+        total,
+        overall_passed=overall_passed,
+        overall_reasoning=overall_reasoning,
+    )
     return {
         "evaluation_results": criteria,
-        "summary": {
-            "passed_all": overall_passed,
-            "passed_count": passed_count,
-            "total_count": total,
-            "scenario_pass_rate": 1.0 if overall_passed else 0.0,
-            "normalized_scenario_score": round(passed_count / total, 3) if total else 0.0,
-            "overall_reasoning": overall_reasoning,
-        },
+        "summary": summary,
     }

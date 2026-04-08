@@ -25,15 +25,11 @@ from .world import build_world
 DEFAULT_SCENARIO_MANIFEST = "scenario_manifest.yaml"
 
 
-def _strict_scenario_score(passed_count: int, total_count: int) -> float:
+def _binary_scenario_score(passed_count: int, total_count: int) -> float:
+    """整题评分：全部小项通过为 1，否则 0。"""
     if total_count <= 0:
         return 0.0
-    missed_count = max(total_count - passed_count, 0)
-    if missed_count == 0:
-        return 1.0
-    if missed_count == 1:
-        return 0.5
-    return 0.0
+    return 1.0 if passed_count == total_count else 0.0
 
 
 def _load_rule_family_metadata(scenario_dir: Path) -> tuple[list[str], dict[str, list[str]]]:
@@ -77,12 +73,18 @@ def _build_batch_aggregate_metrics(
         for item in completed_results
         if "normalized_scenario_score" in item
     ]
-    strict_scores = [
-        float(item.get("strict_scenario_score", 0.0))
+    binary_scores = [
+        float(item.get("binary_scenario_score", 0.0))
         for item in completed_results
     ]
     passed_all_count = sum(
         1 for item in completed_results if item.get("passed_all") is True
+    )
+    sum_passed_subitems = sum(
+        int(item.get("passed_count", 0)) for item in completed_results
+    )
+    sum_total_subitems = sum(
+        int(item.get("total_count", 0)) for item in completed_results
     )
     total_count = len(results)
     completed_count = len(completed_results)
@@ -119,6 +121,15 @@ def _build_batch_aggregate_metrics(
             "score": round(bucket["earned_points"] / total_points, 6),
         }
 
+    # 批量评分（两种）：(1) 整题全对计 1 否则 0 → 对的题数/总题数；(2) 所有小项计分 → 对的小项数/小项总数。
+    batch_all_correct_rate = (
+        round(passed_all_count / completed_count, 6) if completed_count else None
+    )
+    batch_subitem_rate = (
+        round(sum_passed_subitems / sum_total_subitems, 6)
+        if sum_total_subitems > 0
+        else None
+    )
     return {
         "avg_completed_score": round(
             sum(completed_scores) / completed_count, 6
@@ -129,21 +140,27 @@ def _build_batch_aggregate_metrics(
         if total_count
         else None,
         "sum_completed_score": round(sum(completed_scores), 6),
-        "avg_completed_strict_score": round(
-            sum(strict_scores) / completed_count, 6
+        "avg_completed_binary_score": round(
+            sum(binary_scores) / completed_count, 6
         )
         if completed_count
         else None,
-        "avg_all_strict_score": round(sum(strict_scores) / total_count, 6)
+        "avg_all_binary_score": round(sum(binary_scores) / total_count, 6)
         if total_count
         else None,
-        "sum_completed_strict_score": round(sum(strict_scores), 6),
+        "sum_completed_binary_score": round(sum(binary_scores), 6),
+        "batch_all_correct": {
+            "earned": passed_all_count,
+            "total": completed_count,
+            "rate": batch_all_correct_rate,
+        },
+        "batch_subitems": {
+            "earned": sum_passed_subitems,
+            "total": sum_total_subitems,
+            "rate": batch_subitem_rate,
+        },
         "passed_all_count": passed_all_count,
-        "passed_all_rate_completed": round(
-            passed_all_count / completed_count, 6
-        )
-        if completed_count
-        else None,
+        "passed_all_rate_completed": batch_all_correct_rate,
         "rule_dimension_scores": rule_dimension_scores,
     }
 
@@ -177,7 +194,12 @@ def _summary_entry_for_result(
         eval_summary = result["evaluation"]["summary"]
         passed_count = int(eval_summary.get("passed_count", 0))
         total_points = int(eval_summary.get("total_count", 0))
-        strict_score = _strict_scenario_score(passed_count, total_points)
+        binary = float(
+            eval_summary.get(
+                "binary_scenario_score",
+                _binary_scenario_score(passed_count, total_points),
+            )
+        )
         return {
             "scenario_path": str(scenario_path),
             "scenario_id": result["scenario_id"],
@@ -185,7 +207,7 @@ def _summary_entry_for_result(
             "output_path": str(output_path),
             "rule_ids": rule_ids,
             "normalized_scenario_score": eval_summary["normalized_scenario_score"],
-            "strict_scenario_score": strict_score,
+            "binary_scenario_score": binary,
             "passed_all": eval_summary["passed_all"],
             "passed_count": passed_count,
             "total_count": total_points,
@@ -361,6 +383,11 @@ def build_parser() -> argparse.ArgumentParser:
             "Only failed scenarios whose error contains one of these substrings will be rerun."
         ),
     )
+    parser.add_argument(
+        "--no-retry-on-error",
+        action="store_true",
+        help="Disable the default one retry when a scenario run fails with an error.",
+    )
     return parser
 
 
@@ -400,6 +427,7 @@ def main() -> None:
             world_client=world_client,
             evaluator=evaluator,
             runtime_config=runtime_config,
+            retry_once_on_error=not args.no_retry_on_error,
         )
         output_path = _single_output_path(result["scenario_id"], args.output)
         _write_json(output_path, result)
@@ -455,6 +483,7 @@ def main() -> None:
                 world_client=world_client,
                 evaluator=evaluator,
                 runtime_config=runtime_config,
+                retry_once_on_error=not args.no_retry_on_error,
             )
             output_path = batch_output_dir / f"{result['scenario_id']}.json"
             _write_json(output_path, result)
@@ -493,6 +522,7 @@ def main() -> None:
         )
         summary_path = batch_output_dir / "_summary.json"
         _write_json(summary_path, summary)
+        _print_batch_score_line(summary)
         print(json.dumps(summary, ensure_ascii=False, indent=2))
         return
 
@@ -514,6 +544,7 @@ def main() -> None:
             world_client=world_client,
             evaluator=evaluator,
             runtime_config=runtime_config,
+            retry_once_on_error=not args.no_retry_on_error,
         )
         output_path = batch_output_dir / f"{result['scenario_id']}.json"
         _write_json(output_path, result)
@@ -545,7 +576,37 @@ def main() -> None:
     )
     summary_path = batch_output_dir / "_summary.json"
     _write_json(summary_path, summary)
+    _print_batch_score_line(summary)
     print(json.dumps(summary, ensure_ascii=False, indent=2))
+
+
+def _print_batch_score_line(summary: dict[str, Any]) -> None:
+    """在 stderr 打印两种批量得分：整题 0/1 累计、小项累计。"""
+    bac = summary.get("batch_all_correct")
+    bsub = summary.get("batch_subitems")
+    if not isinstance(bac, dict) or not isinstance(bsub, dict):
+        return
+    earned_ac, total_ac, rate_ac = (
+        bac.get("earned"),
+        bac.get("total"),
+        bac.get("rate"),
+    )
+    earned_si, total_si, rate_si = (
+        bsub.get("earned"),
+        bsub.get("total"),
+        bsub.get("rate"),
+    )
+    if total_ac is None or int(total_ac) <= 0:
+        return
+    sub_part = (
+        f"小项累计 {earned_si}/{total_si} (= {rate_si})"
+        if total_si is not None and int(total_si) > 0
+        else "小项累计 N/A"
+    )
+    print(
+        "[batch scores] " f"整题全对 {earned_ac}/{total_ac} (= {rate_ac}); " + sub_part,
+        file=sys.stderr,
+    )
 
 
 def _run_single_scenario(
@@ -585,43 +646,71 @@ def _execute_scenario(
     world_client: ChatCompletionClient | None,
     evaluator: BaseScenarioEvaluator,
     runtime_config: RuntimeConfig,
+    retry_once_on_error: bool = True,
 ) -> dict[str, Any]:
-    try:
-        return _run_single_scenario(
-            scenario_path=scenario_path,
-            registry=registry,
-            agent=agent,
-            world_mode=world_mode,
-            world_client=world_client,
-            evaluator=evaluator,
-            runtime_config=runtime_config,
-        )
-    except ScenarioRunError as exc:
-        artifact = dict(exc.artifact)
-        artifact["runtime_config"] = _runtime_config_snapshot(runtime_config)
-        return artifact
-    except Exception as exc:
-        scenario = load_scenario(scenario_path)
-        return {
-            "status": "failed",
-            "scenario_id": scenario.scenario_id,
-            "category": scenario.category,
-            "user_prompt": scenario.user_prompt,
-            "input_snapshot": {
-                "context": scenario.context,
-                "allowed_tools": registry.export_for_keys(scenario.allowed_tools),
-                "agent_mode": agent.mode,
-                "world_mode": world_mode,
-                "evaluator_mode": evaluator.mode,
-            },
-            "messages": [],
-            "model_logs": [],
-            "world_logs": [],
-            "final_world_state": scenario.state,
-            "evaluation": None,
-            "error": str(exc),
-            "runtime_config": _runtime_config_snapshot(runtime_config),
-        }
+    max_attempts = 2 if retry_once_on_error else 1
+    first_error_summary: str | None = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            result = _run_single_scenario(
+                scenario_path=scenario_path,
+                registry=registry,
+                agent=agent,
+                world_mode=world_mode,
+                world_client=world_client,
+                evaluator=evaluator,
+                runtime_config=runtime_config,
+            )
+            result["attempts_used"] = attempt
+            if attempt > 1 and first_error_summary is not None:
+                result["recovered_after_retry"] = True
+                result["first_attempt_error"] = first_error_summary
+            return result
+        except ScenarioRunError as exc:
+            artifact = dict(exc.artifact)
+            err_msg = str(artifact.get("error") or exc.cause or exc)
+            artifact["runtime_config"] = _runtime_config_snapshot(runtime_config)
+            artifact["attempts_used"] = attempt
+            if attempt < max_attempts:
+                first_error_summary = err_msg
+                sid = artifact.get("scenario_id", scenario_path.stem)
+                print(
+                    f"[retry] {sid} attempt {attempt}/{max_attempts} failed: {err_msg}; retrying once...",
+                    file=sys.stderr,
+                )
+                continue
+            return artifact
+        except Exception as exc:
+            err_msg = str(exc)
+            if attempt < max_attempts:
+                first_error_summary = err_msg
+                print(
+                    f"[retry] {scenario_path.name} attempt {attempt}/{max_attempts} failed: {err_msg}; retrying once...",
+                    file=sys.stderr,
+                )
+                continue
+            scenario = load_scenario(scenario_path)
+            return {
+                "status": "failed",
+                "scenario_id": scenario.scenario_id,
+                "category": scenario.category,
+                "user_prompt": scenario.user_prompt,
+                "input_snapshot": {
+                    "context": scenario.context,
+                    "allowed_tools": registry.export_for_keys(scenario.allowed_tools),
+                    "agent_mode": agent.mode,
+                    "world_mode": world_mode,
+                    "evaluator_mode": evaluator.mode,
+                },
+                "messages": [],
+                "model_logs": [],
+                "world_logs": [],
+                "final_world_state": scenario.state,
+                "evaluation": None,
+                "error": err_msg,
+                "runtime_config": _runtime_config_snapshot(runtime_config),
+                "attempts_used": attempt,
+            }
 
 
 def _resolve_scenario_manifest_path(directory: Path, manifest_arg: str | None) -> Path | None:
