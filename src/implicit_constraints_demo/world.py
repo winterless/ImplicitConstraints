@@ -10,6 +10,21 @@ from .schemas import Scenario, ToolCall, ToolDescriptor, ToolResult
 from .tool_registry import ToolRegistry
 
 
+def _normalize_tool_call_for_schema(call: ToolCall) -> ToolCall:
+    """Map common argument aliases before schema validation (does not mutate the original)."""
+    if call.tool_name != "reminder.create":
+        return call
+    args = dict(call.arguments)
+    remind_at = args.get("remind_at")
+    time_val = args.get("time")
+    remind_ok = isinstance(remind_at, str) and bool(remind_at.strip())
+    time_ok = isinstance(time_val, str) and bool(time_val.strip())
+    if not remind_ok and time_ok:
+        args["remind_at"] = time_val.strip()
+    args.pop("time", None)
+    return ToolCall(server=call.server, tool_name=call.tool_name, arguments=args)
+
+
 class BaseWorld:
     def __init__(self, scenario: Scenario, registry: ToolRegistry) -> None:
         self.scenario = scenario
@@ -24,6 +39,7 @@ class BaseWorld:
         if call.key not in self.scenario.allowed_tools:
             raise ValueError(f"Tool not allowed by scenario: {call.key}")
 
+        call = _normalize_tool_call_for_schema(call)
         descriptor = self.registry.get(call.key)
         self._validate_arguments(descriptor.input_schema, call.arguments)
         return self._execute_validated(call, descriptor)
@@ -98,10 +114,23 @@ class MockWorld(BaseWorld):
                 model_log=None,
             )
         routes = deepcopy(routes_by_destination[matched_key])
+        departure_time = call.arguments.get("departure_time")
+        if isinstance(departure_time, str) and departure_time.strip():
+            reference_departure = departure_time.strip()
+        else:
+            reference_departure = str(self.scenario.context["local_time"])
+        for route in routes:
+            eta_minutes = route.get("eta_minutes")
+            if isinstance(eta_minutes, int):
+                route["expected_arrival_time"] = _add_minutes(reference_departure, eta_minutes)
         return ToolResult(
             success=True,
             message=f"Fetched {len(routes)} route options.",
-            data={"destination": matched_key, "routes": routes},
+            data={
+                "destination": matched_key,
+                "departure_time": reference_departure,
+                "routes": routes,
+            },
             state_changes={},
             model_log=None,
         )
@@ -281,8 +310,28 @@ def _build_world_model_system_prompt() -> str:
         "6. 如果基于当前状态或规则，这个工具调用应当失败，就设置 success=false，并用中性中文解释原因。\n"
         "7. thought_process 和 message 字段必须使用中文。\n"
         "8. 必须只返回一个包含 thought_process、success、message、data、state_changes 的 JSON 对象。\n"
+        "9. 反剧透（评测纪律）：message 与 thought_process 是智能体可见的。不得在二者中复述或推导「应由智能体自行推理」的"
+        "关键结论数值，例如：缓冲分钟数、最晚到机场时刻、最晚从家/当前位置出发时刻、与评测标准答案高度一致的钟点等；"
+        "也不要逐步演算时刻算术或列出「因此最晚应为 xx:xx」的教学式推理。\n"
+        "10. 当调用应判定为失败时，message 须简短、笼统，例如说明「与行程/政策时间要求不符」「提醒时间无效」等，"
+        "不要写出「正确时刻应为 xx:xx」或「应预留 xx 分钟」之类可当作答案的内容。\n"
+        "11. 若当前世界状态中某些字段被省略（场景配置脱敏），视为该信息未提供给智能体；你仍须按工具规则与可见状态判定成败，"
+        "且不得在 message 中编造或泄露被省略字段中的数值。\n"
+        "12. 成功且 data 中需要给出时间类字段时，仅填符合工具契约与可见状态的值；避免在 message 里重复粘贴这些值作为「提示」。\n"
         "不要使用 markdown 代码块围栏。"
     )
+
+
+def _redact_state_for_world_llm(scenario: Scenario, state: dict[str, Any]) -> dict[str, Any]:
+    """Return a copy of state with optional top-level keys removed for the LLM world prompt."""
+    keys = scenario.raw.get("world_model_redact_state_keys")
+    if not isinstance(keys, list) or not keys:
+        return state
+    out = deepcopy(state)
+    for key in keys:
+        if isinstance(key, str) and key in out:
+            del out[key]
+    return out
 
 
 def _build_world_model_user_prompt(
@@ -291,13 +340,14 @@ def _build_world_model_user_prompt(
     current_state: dict[str, Any],
     tool_call: ToolCall,
 ) -> str:
+    state_for_prompt = _redact_state_for_world_llm(scenario, current_state)
     return (
         f"场景 ID：{scenario.scenario_id}\n"
         f"场景类别：{scenario.category}\n"
         f"用户请求：{scenario.user_prompt}\n\n"
         f"场景上下文：\n{json.dumps(scenario.context, ensure_ascii=False, indent=2)}\n\n"
         f"执行规则：\n{json.dumps(scenario.execution_rules, ensure_ascii=False, indent=2)}\n\n"
-        f"当前世界状态：\n{json.dumps(current_state, ensure_ascii=False, indent=2)}\n\n"
+        f"当前世界状态：\n{json.dumps(state_for_prompt, ensure_ascii=False, indent=2)}\n\n"
         f"工具描述：\n{json.dumps(_descriptor_payload(descriptor), ensure_ascii=False, indent=2)}\n\n"
         f"工具调用：\n{json.dumps({'server': tool_call.server, 'tool_name': tool_call.tool_name, 'arguments': tool_call.arguments}, ensure_ascii=False, indent=2)}\n\n"
         "请只模拟这一次动作对应的环境响应，并以中文填写解释字段。"

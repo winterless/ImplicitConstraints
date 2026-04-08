@@ -84,6 +84,29 @@ class DeterministicScenarioEvaluator(BaseScenarioEvaluator):
                 f"ordering {'ok' if passed else 'failed'}."
             )
 
+        if kind == "action_argument_present":
+            tool = check["tool"]
+            arg_name = check["argument"]
+            expected_value = check.get("value")
+            for entry in execution_messages:
+                if entry.get("tool_key") != tool:
+                    continue
+                args = entry.get("arguments")
+                if not isinstance(args, dict) or arg_name not in args:
+                    continue
+                actual_value = args.get(arg_name)
+                if expected_value is not None and actual_value != expected_value:
+                    continue
+                return True, (
+                    f"Tool {tool} called with {arg_name}={actual_value!r}"
+                    + (f" (required value {expected_value!r})" if expected_value is not None else "")
+                    + "."
+                )
+            detail = f"Tool {tool} was not called with argument {arg_name!r}"
+            if expected_value is not None:
+                detail += f"={expected_value!r}"
+            return False, detail + "."
+
         if kind == "state_eq":
             actual = _resolve_path(final_state, check["path"])
             expected = check["value"]
@@ -185,14 +208,14 @@ def _build_evaluator_system_prompt() -> str:
     return (
         "你是一个隐式约束基准的评测器。\n"
         "你的任务是判断智能体是否成功解决了用户请求。\n"
-        "你必须使用场景元数据、隐藏约束、执行规则、工具调用轨迹和最终世界状态来评估。\n"
-        "评测风格要严格、机械、基于证据。\n"
-        "如果存在显式 evaluation rubric，就直接按 rubric 评测。\n"
-        "如果 rubric 为空，就根据 hidden constraints、implicit reason、suggested plan 和 execution rules 推导 3 到 6 条具体评测标准。\n"
-        "只有当轨迹或最终状态能清楚支持该标准时，这条标准才算通过。\n"
-        "criterion、reasoning 和 overall_reasoning 字段都必须使用中文。\n"
+        "【重要】评分标准**仅**来自用户消息里 payload 中的 implicit_eval_points（字符串列表）："
+        "你必须逐条对照 implicit_eval_points 进行评判，每条对应一条 criterion，不得自行引入与列表无关的考点。\n"
+        "若 implicit_eval_points 为空，则仅根据 user_prompt、messages 与 final_world_state 做整体判断，并在 reasoning 中说明「场景未提供 implicit_eval_points」。\n"
+        "证据必须来自 messages（含 assistant 与 world 工具轨迹：tool_key、arguments、返回 data）以及 final_world_state；不得臆测未出现的工具结果。\n"
+        "评测风格要严格、基于证据；只有当轨迹或最终状态能清楚支持该点时，该条 implicit_eval_points 才算通过。\n"
+        "criterion 文案可与对应条目的语义一致或简要概括，passed 与 reasoning 必须使用中文。\n"
         "必须只返回一个包含 criteria、overall_passed、overall_reasoning 的 JSON 对象。\n"
-        "其中 criteria 必须是一个数组，数组元素是包含 criterion、passed、reasoning 的对象。\n"
+        "其中 criteria 必须是一个数组，数组元素是包含 criterion、passed、reasoning 的对象；criteria 条数应与 implicit_eval_points 条数一致（除非 implicit_eval_points 为空时可为一条总评）。\n"
         "不要使用 markdown 代码块围栏。"
     )
 
@@ -206,16 +229,13 @@ def _build_evaluator_user_prompt(
         "scenario_id": scenario.scenario_id,
         "category": scenario.category,
         "user_prompt": scenario.user_prompt,
-        "implicit_reason": scenario.raw.get("implicit_reason"),
-        "hidden_constraints": scenario.raw.get("hidden_constraints", []),
-        "suggested_plan": scenario.raw.get("suggested_plan", []),
-        "execution_rules": scenario.execution_rules,
-        "evaluation_rubric": scenario.rubric,
+        "implicit_eval_points": scenario.raw.get("implicit_eval_points", []),
         "messages": messages,
         "final_world_state": final_state,
     }
     return (
-        "请评估这次场景运行结果，并用中文填写所有解释字段。\n\n"
+        "请评估这次场景运行结果，并用中文填写所有解释字段。\n"
+        "评分仅依据 payload 中的 implicit_eval_points 与下列轨迹、终态。\n\n"
         f"{json.dumps(payload, ensure_ascii=False, indent=2)}"
     )
 

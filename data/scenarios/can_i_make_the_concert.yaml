@@ -1,75 +1,82 @@
+# evaluation_profile: llm_only
+# LLM 评测仅使用 implicit_eval_points（见 evaluator._build_evaluator_user_prompt）；不依赖 hidden_constraints / execution_rules / evaluation_rubric。
 id: can_i_make_the_concert
 category: implicit_reasoning
 user_prompt: 帮我判断今晚 7 点杭州的林俊杰演唱会我现在还赶不赶得上。
-original_question: 帮我看看今晚7点杭州的林俊杰演唱会我能去不。
-tool_category: schedule_travel
-implicit_reason: 用户实际要的是时间可行性判断，而不是单点查询。系统需要检查本地日历空闲时间，再估算当前到演唱会场馆的出发到达耗时，最后用演出开始时间和必要缓冲时间做比对，给出是否来得及以及最晚出发时间。
-hidden_constraints:
-- 需要确认今晚是否已有日程冲突。
-- 需要估算到目标场馆的真实 ETA。
-- 判断逻辑应包含入场、检票等缓冲时间。
-- 输出应包括结论和关键原因，而不只是路线信息。
+
+implicit_reason: 用户实际要的是时间可行性判断，而不是单点查询。系统需要检查本地日历空闲时间，再估算当前到演唱会场馆的出发到达耗时，最后用演出开始时间和必要缓冲时间做比对，给出是否来得及以及关键原因。
+
+# 三条隐含考点（LLM 评测时应逐条给出 passed + reasoning）；时间数值允许合理分歧，但推理须自洽、有证据。
+implicit_eval_points:
+  - >
+    【日程冲突】是否在结论前核对当晚相关时段是否被占用（如调用 schedule.list_free_slots 或结合 get_next_event 等）：若今晚在出发至观演所需时间窗内存在硬冲突却仍结论「能赶上」，或完全不看空闲/日程直接断言，通常判弱不满足。
+  - >
+    【开场时间与入场缓冲】events.get_venue_details 仅提供开场时间等事实（本题不通过工具返回「建议提前多久到场」）。是否仍区分「开演时刻」与「应提前到场/检票」的合理时刻：需在推理中自行估计入场、找座等所需提前量（合理区间即可，不要求与某一固定分钟一致），再与 ETA 对照；若仅以 19:00 当作「到达场馆」的截止、忽略大型演出通常需提前入场，判不满足。
+  - >
+    【路线 ETA 与结论】是否用 maps.get_routes 得到至场馆路线的 ETA/预计到达（优先关注是否按参考出发时刻传入 departure_time 或与 context.local_time 一致），再与上述到场截止比对并给出是否赶得上及简要因果链；若只罗列路线、不做可行性结论或缺少关键时间对照，判弱不满足。
+
 suggested_plan:
-- 先确认今晚 7 点前后的空闲窗口。
-- 计算到会场的最优路线和 ETA。
-- 对比演出开始时间与入场缓冲，输出能否赶到。
+  - 先确认今晚观演前后时段是否已有日程冲突或空闲窗口。
+  - 查询场馆/活动详情，取得开场时间与场馆信息；结合常识估计需提前到场的大致时刻。
+  - 查询当前到场馆的路线与 ETA，与上述到场目标对照，给出是否来得及及原因。
+
 sample_result:
   tool_trace:
-  - step: 1
-    tool: device:schedule.list_free_slots
-    arguments:
-      date: '2026-03-19'
-    expected_observation: >
-      今晚 19:00 前后应存在连续空闲时间，没有别的日程会直接卡住去演唱会这件事。
-  - step: 2
-    tool: device:events.get_venue_details
-    arguments:
-      event_name: 林俊杰演唱会
-      city: 杭州
-    expected_observation: >
-      场馆信息里应包含 19:00 开始和建议至少提前 20 分钟到场，
-      因此实际判断目标是能否在 18:40 前到达。
-  - step: 3
-    tool: device:maps.get_routes
-    arguments:
-      destination: Hangzhou Olympic Sports Center
-    expected_observation: >
-      最快路线 ETA 约为 22 分钟；从当前 18:10 出发，预计 18:32 到，
-      仍早于建议到场时间 18:40，因此结论应是赶得上。
+    - step: 1
+      tool: device:schedule.list_free_slots
+      arguments:
+        date: "2026-03-19"
+      expected_observation: >
+        今晚 19:00 前后应存在连续空闲时间，没有别的日程会直接卡住去演唱会这件事。
+    - step: 2
+      tool: device:events.get_venue_details
+      arguments:
+        event_name: 林俊杰演唱会
+        city: 杭州
+      expected_observation: >
+        应读到开场 19:00、场馆名称等；不含「建议提前多久到场」字段，需自行估计需在开演前多久到馆。
+    - step: 3
+      tool: device:maps.get_routes
+      arguments:
+        destination: Hangzhou Olympic Sports Center
+      expected_observation: >
+        最快路线 ETA 约 22 分钟；从当前 18:10 出发，预计约 18:32 到。
+        若结合常识认为需提前若干分钟入场，仍可将「能否赶上」判为来得及（推理自洽即可）。
   final_answer: >
-    现在出发的话，你大概率赶得上。因为今晚 7 点前后没有别的日程冲突，
-    演唱会建议至少提前 20 分钟到场，而最快路线 ETA 约 22 分钟，
-    按当前时间估算大约 18:32 就能到，仍早于 18:40 的建议到场线。
+    现在出发的话，你大概率赶得上。今晚 7 点前后日程不冲突；演出 19:00 开场，
+    大型演唱会通常需提前进场，按最快路线约 18:32 到馆，一般仍早于合理入场窗口。
+
 max_steps: 6
 allowed_tools:
-- device:schedule.get_next_event
-- device:schedule.list_free_slots
-- device:events.get_venue_details
-- device:maps.get_routes
-- device:weather.get_forecast
-- device:weather.check_weather
-- device:temperature.check
-- device:alarm.create
-- device:alarm.modify
-- device:alarm.check
-- device:reminder.create
-- device:reminder.check
-- device:travel.get_trip_brief
-- device:power.get_battery_status
-- device:booking.list_upcoming_bookings
-- device:booking.get_booking_status
-- device:booking.cancel_booking
-- device:reservations.get_details
-- device:reservations.cancel
-- device:power.freeze_background_apps
-- device:power.apply_saving_plan
-- device:profile.get_user_labels
-- device:note.search
-- device:timer.create
+  - device:schedule.get_next_event
+  - device:schedule.list_free_slots
+  - device:events.get_venue_details
+  - device:maps.get_routes
+  - device:weather.get_forecast
+  - device:weather.check_weather
+  - device:temperature.check
+  - device:alarm.create
+  - device:alarm.modify
+  - device:alarm.check
+  - device:reminder.create
+  - device:reminder.check
+  - device:travel.get_trip_brief
+  - device:power.get_battery_status
+  - device:booking.list_upcoming_bookings
+  - device:booking.get_booking_status
+  - device:booking.cancel_booking
+  - device:reservations.get_details
+  - device:reservations.cancel
+  - device:power.freeze_background_apps
+  - device:power.apply_saving_plan
+  - device:profile.get_user_labels
+  - device:note.search
+  - device:timer.create
+
 world:
   context:
-    date: '2026-03-19'
-    local_time: '18:10'
+    date: "2026-03-19"
+    local_time: "18:10"
     city: 杭州
     destination_hint: Hangzhou Olympic Sports Center
     scenario_source: mobile_implicit_cases_zh
@@ -77,24 +84,24 @@ world:
     calendar:
       next_event:
         title: Night reading
-        start_time: '21:30'
+        start_time: "21:30"
         location: Home
         boarding_buffer_minutes: 0
     maps:
       routes_by_destination:
         Hangzhou Olympic Sports Center:
-        - route_id: route_fast
-          label: Fast route
-          distance_km: 18
-          eta_minutes: 22
-          traffic_level: moderate
-          tolls: false
-        - route_id: route_safe
-          label: Safer route
-          distance_km: 21
-          eta_minutes: 28
-          traffic_level: light
-          tolls: true
+          - route_id: route_fast
+            label: Fast route
+            distance_km: 18
+            eta_minutes: 22
+            traffic_level: moderate
+            tolls: false
+          - route_id: route_safe
+            label: Safer route
+            distance_km: 21
+            eta_minutes: 28
+            traffic_level: light
+            tolls: true
     navigation:
       active_destination: null
       active_route_id: null
@@ -104,17 +111,10 @@ world:
     tool_responses:
       schedule.list_free_slots:
         free_slots:
-          - start_time: '2026-03-19 18:00'
-            end_time: '2026-03-19 21:00'
+          - start_time: "2026-03-19 18:00"
+            end_time: "2026-03-19 21:00"
       events.get_venue_details:
         venue:
           event_name: 林俊杰演唱会
           name: Hangzhou Olympic Sports Center
-          start_time: '2026-03-19 19:00'
-          recommended_arrival_buffer_minutes: 20
-execution_rules:
-- 需要确认今晚是否已有日程冲突。
-- 需要估算到目标场馆的真实 ETA。
-- 判断逻辑应包含入场、检票等缓冲时间。
-- 输出应包括结论和关键原因，而不只是路线信息。
-evaluation_rubric: []
+          start_time: "2026-03-19 19:00"

@@ -1,66 +1,78 @@
+# evaluation_profile: llm_only
+# LLM 评测仅使用 implicit_eval_points（见 evaluator._build_evaluator_user_prompt）；不依赖 hidden_constraints / execution_rules / evaluation_rubric。
 id: arrive_home_turn_on_devices
 category: implicit_reasoning
-user_prompt: 快到家的时候帮我把家里的空调和热水器提前打开。
-original_question: 等下快到家的时候，把家里的空调和热水器打开。
-tool_category: smart_home
-implicit_reason: 用户不是要立刻开设备，而是要基于到家 ETA 的条件触发自动化。系统需要持续感知回家路线或导航状态，在 ETA 进入阈值区间时静默执行智能家居动作，避免过早开启导致浪费。
-hidden_constraints:
-- 需要明确目标是“快到家”而非立即执行。
-- 应基于 ETA 阈值触发，而不是固定时间触发。
-- 需要同时控制多个设备。
-- 自动化应在后台低打扰完成。
+user_prompt: 到家前帮我把家里的空调和电热水器提前打开。
+
+implicit_reason: 用户不是要立刻开设备，而是要基于到家 ETA 的条件触发自动化。本题世界侧设定为用户已在回家导航中，且实际出行方式为自行车接驳地铁等多段行程（见 state.navigation）；驾车路网的路线查询与当前真实交通方式可能不一致，剩余时间应以导航状态为准。智能体应在 ETA 进入阈值区间时静默执行智能家居动作，避免过早开启导致浪费。
+
+# 三条隐含考点（LLM 评测时应逐条给出 passed + reasoning）；阈值分钟数等允许合理分歧，但推理须自洽、有证据。
+implicit_eval_points:
+  - >
+    【提前量与舒适度/能耗】是否区分空调与电热水器的合理「提前开启」时机（常识量级，因房型、设备功率、季节水温等允许分歧）：家用空调预冷往往需约十余分钟至半小时量级，房间才明显凉下来（过小空间可更短、大热天或大户型可更长）；储水式电热水器把整箱水加热到可用温度常见约数十分钟至一小时量级，燃气储水式通常比电加热更快，但仍普遍长于单纯空调预冷。推理应体现「不宜过早全开以免空转费电/费气，也不宜过晚导致到家仍不舒适」，并最好与到家 ETA 或分段触发相联系；若对两类设备用同一提前量一笔带过、完全忽略预热时长差异、或仍表现为「立刻全开」且无 ETA/临近语义，通常判不满足或弱不满足。
+  - >
+    【ETA/路线依据·交通方式】本题世界条件：用户正以自行车+地铁等方式在途回家（见 final_world_state.navigation：含当前导航下的 eta_minutes、expected_arrival_time 及方式说明；与 maps.get_routes 返回的驾车类路线 ETA 可能不一致）。「还有多久到家」的真值应以 maps.get_navigation_status 所反映的**当前导航行程**为准；若仅用 maps.get_routes 的 ETA 当作用户真实到家时间，在存在多模式偏差时通常判弱不满足或判推理不成立。轨迹中应体现对导航状态的依赖，或在推理中明确为何不采用驾车路网 ETA。
+  - >
+    【多设备与自动化形态】是否同时覆盖空调与电热水器（或明确对两者配置），并倾向 home.create_arrival_automation 或等价的「接近到家时自动执行」路径，而不是只操作单一设备、或仅口头答应而无与「临近到家」一致的落地动作。
+
 suggested_plan:
-- 读取当前回家导航状态和 ETA。
-- 创建接近到家时触发的自动化规则。
-- 在 ETA 命中阈值时开启空调和热水器。
+  - 读取 maps.get_navigation_status，用当前导航下的 ETA/预计到达理解剩余在途时间（勿把 get_routes 的驾车 ETA 误当真实行程）。
+  - 创建接近到家时触发的自动化规则（按 ETA 阈值而非无关固定时间）。
+  - 在 ETA 命中阈值时开启空调和电热水器。
+
 sample_result:
   tool_trace:
-  - step: 1
-    tool: device:maps.get_routes
-    arguments:
-      destination: Home
-    expected_observation: >
-      应能读到当前回家候选路线里，最快路线 ETA 约为 22 分钟，
-      说明“快到家”应被理解为基于 ETA 的触发，而不是立刻开设备。
-  - step: 2
-    tool: device:home.create_arrival_automation
-    arguments:
-      eta_threshold_minutes: 15
-      devices:
-      - air_conditioner
-      - water_heater
-      action: turn_on
-    expected_observation: >
-      系统应创建一条基于到家 ETA 的自动化规则：当回家 ETA 进入 15 分钟内时，
-      自动开启空调和热水器，而不是立即执行。
+    - step: 1
+      tool: device:maps.get_navigation_status
+      arguments: {}
+      expected_observation: >
+        读到正在导航回家、方式为自行车+地铁等；当前导航 ETA 约 35 分钟、预计到达约 18:45。
+        若此时去查 get_routes，会得到驾车路网 ETA（约 22 分钟），与真实行程不一致，不应作为到家时间依据。
+    - step: 2
+      tool: device:home.create_arrival_automation
+      arguments:
+        eta_threshold_minutes: 15
+        devices:
+          - air_conditioner
+          - water_heater
+        action: turn_on
+      expected_observation: >
+        基于导航 ETA（而非驾车 get_routes）创建自动化：当回家剩余时间进入 15 分钟内时，
+        自动开启空调和电热水器，而不是立即执行。
   final_answer: >
-    已帮你设置好到家前自动开启规则，不会现在立刻打开。等你回家 ETA 进入 15 分钟以内时，
-    空调和热水器会自动开启，这样既能提前准备好家里状态，也避免过早开启带来的浪费。
+    已按你当前自行车+地铁回家的导航 ETA 设好规则，不会现在立刻打开。等你导航剩余时间进入 15 分钟以内时，
+    空调和电热水器会自动开启，这样既能提前准备好家里状态，也避免过早开启带来的浪费。
+
 max_steps: 6
 allowed_tools:
-- device:maps.get_routes
-- device:home.create_arrival_automation
-- device:timer.create
-- device:timer.check
-- device:reminder.create
-- device:reminder.check
-- device:power.get_battery_status
-- device:weather.get_forecast
-- device:schedule.get_next_event
-- device:alarm.create
-- device:alarm.check
-- device:profile.get_user_labels
-- device:note.search
-- device:weather.check_weather
-- device:schedule.list_free_slots
-- device:travel.get_trip_brief
-- device:note.open
-- device:power.freeze_background_apps
-- device:power.apply_saving_plan
+  - device:maps.get_routes
+  - device:maps.get_navigation_status
+  - device:home.create_arrival_automation
+  - device:timer.create
+  - device:timer.check
+  - device:reminder.create
+  - device:reminder.check
+  - device:power.get_battery_status
+  - device:weather.get_forecast
+  - device:schedule.get_next_event
+  - device:alarm.create
+  - device:alarm.check
+  - device:profile.get_user_labels
+  - device:note.search
+  - device:weather.check_weather
+  - device:schedule.list_free_slots
+  - device:travel.get_trip_brief
+  - device:note.open
+  - device:power.freeze_background_apps
+  - device:power.apply_saving_plan
+
+world_model_redact_state_keys:
+  - tool_state_updates
+
 world:
   context:
-    date: '2026-03-19'
-    local_time: '18:10'
+    date: "2026-03-19"
+    local_time: "18:10"
     city: Seattle
     destination_hint: Home
     scenario_source: mobile_implicit_cases_zh
@@ -68,44 +80,44 @@ world:
     calendar:
       next_event:
         title: Upcoming task
-        start_time: '19:30'
+        start_time: "19:30"
         location: Home
         boarding_buffer_minutes: 30
     maps:
       routes_by_destination:
         Home:
-        - route_id: route_fast
-          label: Fast route
-          distance_km: 18
-          eta_minutes: 22
-          traffic_level: moderate
-          tolls: false
-        - route_id: route_safe
-          label: Safer route
-          distance_km: 21
-          eta_minutes: 28
-          traffic_level: light
-          tolls: true
+          - route_id: route_fast
+            label: Fast route
+            distance_km: 18
+            eta_minutes: 22
+            traffic_level: moderate
+            tolls: false
+          - route_id: route_safe
+            label: Safer route
+            distance_km: 21
+            eta_minutes: 28
+            traffic_level: light
+            tolls: true
     navigation:
-      active_destination: null
-      active_route_id: null
-      guidance_started: false
-      expected_arrival_time: null
-      selected_route_summary: null
+      active_destination: Home
+      active_route_id: route_bike_subway
+      guidance_started: true
+      expected_arrival_time: "18:45"
+      selected_route_summary:
+        label: Bike + subway
+        modes:
+          - bicycle
+          - subway
+        distance_km: 24
+        eta_minutes: 35
+        traffic_level: moderate
     tool_state_updates:
       home.create_arrival_automation:
         home:
           automations:
-          - automation_id: auto_home_arrival_001
-            eta_threshold_minutes: 15
-            devices:
-            - air_conditioner
-            - water_heater
-            action: turn_on
-execution_rules:
-- 需要明确目标是“快到家”而非立即执行。
-- 应基于 ETA 阈值触发，而不是固定时间触发。
-- 需要同时控制多个设备。
-- 自动化应在后台低打扰完成。
-- 成功路径应创建到家自动化规则，而不是马上打开设备。
-evaluation_rubric: []
+            - automation_id: auto_home_arrival_001
+              eta_threshold_minutes: 15
+              devices:
+                - air_conditioner
+                - water_heater
+              action: turn_on

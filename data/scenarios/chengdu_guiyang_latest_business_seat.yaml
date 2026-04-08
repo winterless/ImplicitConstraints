@@ -1,18 +1,25 @@
+# evaluation_profile: llm_only
+# LLM 评测仅使用 implicit_eval_points（见 evaluator._build_evaluator_user_prompt）；不依赖 hidden_constraints / execution_rules / evaluation_rubric。
 id: chengdu_guiyang_latest_business_seat
 category: implicit_reasoning
-user_prompt: 查周六成都东到贵阳北最晚还有商务座余票的高铁和票价。
-original_question: 我计划下个星期六从成都东站前往贵阳北站，但希望乘坐当天最晚出发且还有商务座余票的高铁，请帮我查询符合要求的车次信息及对应票价？
-tool_category: rail_latest_business_seat_search
-implicit_reason: 用户表面上是在查车次信息，真实目标是筛出当天最晚且仍有商务座余票的唯一可行车次。系统必须把日期、车次时序、商务座库存和票价绑定起来一起判断，而不是返回一个普通车次列表。
-hidden_constraints:
-  - 必须基于周六对应的候选车次进行筛选，而不是返回泛化时刻表。
-  - 最晚出发的判断必须建立在商务座仍有余票的前提上。
-  - 票价必须和最终筛中的具体车次及席别绑定。
-  - 最终输出应给出唯一最优结果，而不是一组未排序候选。
+user_prompt: 查周六成都东到贵阳北最晚还有商务座余票的高铁。
+
+implicit_reason: 用户表面上是在查车次信息，真实目标是筛出当天出发时刻尽量晚、且该车次商务座仍有余座的一趟。高铁均配置商务座席别，关键是对应车次当趟商务座是否还有余座；若无余座则需从仍有余座的车次中按出发时刻从晚到早筛选。须把日期、时刻、余座与票价绑定判断，不能把「更晚出发但商务座已售罄」的车次当作可订答案。
+
+# 三条隐含考点（LLM 评测时应逐条给出 passed + reasoning）；车次号与时刻以轨迹与 final_world_state 为准，允许表述差异，但推理须自洽。
+implicit_eval_points:
+  - >
+    【日期与查询范围】是否针对「周六」与指定 OD（成都东—贵阳北）调用 rail.search_train_options（或等价），且 travel_date 与用户所指周六一致；若日期含糊或查询范围错位，判弱不满足。
+  - >
+    【商务座余座】是否按车次区分「席别存在」与「当趟可售」：以 business_seat_remaining（或等价字段）为 0 表示该趟商务座无可售余座、大于 0 表示仍有余座。若把绝对出发最晚但 business_seat_remaining 为 0 的车次当作可订答案，判不满足；合理做法是在 business_seat_remaining>0 的子集中取出发时刻最晚的一趟（更晚车次无座则等价于向前择仍有余座者）。
+  - >
+    【最晚可订与票价绑定】在余票为真的子集中，是否选出出发时刻最晚的一趟，并给出该车次对应的商务座票价（与车次/席别一致）；若只罗列多趟、未收敛到唯一最优或未绑定票价，判弱不满足。
+
 suggested_plan:
-  - 查询成都东到贵阳北周六当天的高铁候选。
-  - 过滤掉商务座售罄的车次。
-  - 在剩余候选中选择最晚出发的一趟，并返回对应票价。
+  - 按成都东—贵阳北、目标周六查询高铁候选车次。
+  - 按 business_seat_remaining 排除当趟商务座无座车次，在仍有余座的班次中选出发最晚的一趟。
+  - 输出车次、时刻及对应商务座票价。
+
 sample_result:
   tool_trace:
     - step: 1
@@ -22,7 +29,7 @@ sample_result:
         destination_station: 贵阳北
         travel_date: "2026-04-18"
       expected_observation: >
-        返回多趟车次：其中 G2371 最晚出发但商务座已售罄；在仍有余票的班次中，
+        返回多趟车次：G2371 出发最晚但 business_seat_remaining 为 0；在仍有余座的班次中，
         G2981（18:05 发）比 G2893（17:32 发）更晚。
     - step: 2
       tool: device:schedule.get_next_event
@@ -30,8 +37,9 @@ sample_result:
       expected_observation: >
         当日无其它强制日程冲突出行时间的约束，选择最晚可订商务座车次作为答案合理。
   final_answer: >
-    2026-04-18（周六）从成都东到贵阳北，在**商务座仍有余票**的车次里，最晚出发的是 **G2981**（18:05 开，20:41 到），
-    商务座票价 **728 元**。更晚的 G2371 虽时刻更迟，但商务座已售罄，不能作为可订答案。
+    2026-04-18（周六）从成都东到贵阳北，在商务座仍有余座的车次里，最晚出发的是 G2981（18:05 开，20:41 到），
+    商务座票价 728 元。更晚的 G2371 虽时刻更迟，但该趟商务座余座为 0，不能作为可订答案。
+
 max_steps: 3
 allowed_tools:
   - device:rail.search_train_options
@@ -46,6 +54,7 @@ allowed_tools:
   - device:profile.get_user_labels
   - device:note.search
   - device:timer.create
+
 world:
   context:
     date: "2026-04-13"
@@ -66,7 +75,7 @@ world:
             travel_date: "2026-04-18"
             departure_time: "19:12"
             arrival_time: "21:48"
-            business_seat_available: false
+            business_seat_remaining: 0
             business_seat_price_cny: 735
           - train_no: G2981
             origin_station: 成都东
@@ -74,7 +83,7 @@ world:
             travel_date: "2026-04-18"
             departure_time: "18:05"
             arrival_time: "20:41"
-            business_seat_available: true
+            business_seat_remaining: 12
             business_seat_price_cny: 728
           - train_no: G2893
             origin_station: 成都东
@@ -82,7 +91,7 @@ world:
             travel_date: "2026-04-18"
             departure_time: "17:32"
             arrival_time: "20:06"
-            business_seat_available: true
+            business_seat_remaining: 6
             business_seat_price_cny: 721
           - train_no: G2877
             origin_station: 成都东
@@ -90,10 +99,5 @@ world:
             travel_date: "2026-04-18"
             departure_time: "16:10"
             arrival_time: "18:47"
-            business_seat_available: false
+            business_seat_remaining: 0
             business_seat_price_cny: 714
-execution_rules:
-  - 必须在有商务座余票的候选中选出最晚出发的一趟；比较出发时刻时不得把商务座已售罄的车次纳入候选集。
-  - 不能把绝对最晚但已售罄商务座的车次当成正确答案。
-  - 最终输出必须包含所选车次及其商务座票价，且票价须与该车次绑定。
-evaluation_rubric: []

@@ -1,39 +1,66 @@
+# evaluation_profile: llm_only
+# LLM 评测仅使用 implicit_eval_points（见 evaluator._build_evaluator_user_prompt）；不依赖 hidden_constraints / execution_rules / evaluation_rubric。
 id: airport_route_time
 category: implicit_reasoning
-user_prompt: 帮我设置导航，确保我能准时到机场。
+user_prompt: 帮我看看打车到机场的话几点出发合适。
+implicit_reason: 用户表面上是在问“下午几点出发”，但真实目标不是做一个普通的出发时间提醒，而是要同时满足三类隐含要求：把机场出发前的缓冲纳入时间轴、用面向未来出发时刻的路线耗时做判断、并在交互上让用户能落地执行（提示或创建提醒）。若只看“18:00 起飞”或只看当前似乎还有充足时间，就会把题目错误简化成泛泛的时间建议。
+
+# 三条隐含考点（LLM 评测时应逐条给出 passed + reasoning）；时间数值允许合理分歧，但推理须自洽、有证据。
+implicit_eval_points:
+  - >
+    【缓冲】是否把「到机场办手续」与「18:00 起飞」区分开：推理中应体现机场出发前的准备时间（本题世界真值见 final_world_state.travel_policy.airport_arrival_buffer_minutes，一般为约 90 分钟量级→最晚到机场时刻约在 18:00 前 90 分钟）。不要求与参考分秒一致，但若完全按 18:00 当到港截止则判不满足本点。
+  - >
+    【未来用时】行程时间是否按「参考出发时刻」预测：优先看  maps.get_routes 的调用是否传入 departure_time（或与 context.local_time 一致的参考时刻），以及最终答复是否用 ETA/预计到达讨论「何时出门」；若仅用「现在」口语、未体现按某出发时刻预测路况/ETA，则判弱不满足。
+  - >
+    【提醒交互】最终答复是否明确提示用户设置出发提醒或闹钟，或轨迹中出现代为 reminder.create / alarm.create；仅给时刻、不提示用户如何落地，通常判交互不完整。二者有其一即可。
+
+suggested_plan:
+  - 先读取下一条日程，确认目标确实是即将出发的机场航班。
+  - 再读取行程摘要，识别这是需要预留值机、托运和安检时间的航班出行。
+  - 先根据航班时间与合理缓冲推导最晚到机场时间，再用地图接口按参考出发时刻查询路线（得到 ETA 与预计到达），自行反推各路线最晚出发时刻。
+  - 在最终答复中提示用户设置出发提醒，或代为创建提醒。
+
 sample_result:
   tool_trace:
     - step: 1
       tool: device:schedule.get_next_event
       arguments: {}
       expected_observation: >
-        读到下一条日程是 18:00 在 SEA Airport 起飞的航班，且需要 90 分钟登机缓冲，
-        因而最晚应在 16:30 前到达机场。
+        读到下一条日程是 18:00 在 SEA Airport 起飞的航班，地点明确是机场，
+        但日程本身没有直接给出需要提前多久到达。
     - step: 2
+      tool: device:travel.get_trip_brief
+      arguments: {}
+      expected_observation: >
+        读到这次行程是从 SEA Airport 出发的国内航班，行程提示要求为值机与安检预留充足时间，
+        需要据此主动推断最晚到机场时间不能直接按 18:00 计算，应结合行程提示自行估计合理缓冲后再推算。
+    - step: 3
       tool: device:maps.get_routes
       arguments:
         destination: SEA Airport
+        departure_time: "14:20"
       expected_observation: >
-        看到 `route_short` ETA 为 42 分钟、`route_airport` ETA 为 34 分钟，
-        虽然前者距离更短，但后者更快，更有机会满足 16:30 前到达的约束。
-    - step: 3
-      tool: device:maps.start_navigation
+        在假定 14:20 出发的前提下，各路线返回 ETA 与预计到达时间（例如约 15:02 / 14:54）；
+        再结合最晚需 16:30 前到机场，自行反推：route_short 最晚约 15:48 出发、route_airport 最晚约 15:56 出发。
+        虽然前者距离更短，但后者 ETA 更短，允许更晚出发。
+    - step: 4
+      tool: device:reminder.create
       arguments:
-        destination: SEA Airport
-        route_id: route_airport
+        title: 去 SEA Airport 出发提醒
+        remind_at: "2026-03-18 15:55"
+        note: 建议走 Airport freeway route，最晚 15:56 前出发
       expected_observation: >
-        导航应成功启动到 SEA Airport，预计到达时间不晚于 16:30，
-        说明该路线满足航班起飞前的登机缓冲要求。
+        已创建下午出发提醒，提醒时间略早于最晚可出发时刻，
+        便于用户按更稳妥的路线前往机场。
   final_answer: >
-    已为你选择更稳妥的 Airport freeway route 并开始导航。虽然它距离更远，但 ETA 只有 34 分钟，
-    比本地短路线更快，能在航班 18:00 起飞前预留 90 分钟登机缓冲，更适合这次去机场。
+    建议你走 Airport freeway route，并尽量在 15:56 前出发。虽然它距离更远，但 ETA 只有 34 分钟，
+    比本地短路线更快，也能给机场值机与安检留出更稳妥的余量。我先按 15:55 给你设了出发提醒，下午看到提醒就可以出门。
 max_steps: 6
 allowed_tools:
   - device:schedule.get_next_event
   - device:schedule.list_free_slots
   - device:travel.get_trip_brief
   - device:maps.get_routes
-  - device:maps.start_navigation
   - device:events.get_venue_details
   - device:weather.get_forecast
   - device:weather.check_weather
@@ -46,10 +73,14 @@ allowed_tools:
   - device:profile.get_user_labels
   - device:note.search
   - device:timer.create
+# LLM world 提示词中的状态快照：去掉可由评测/参考答案直接复现的字段，配合 world.py 反剧透规则，减少 message 泄题。
+world_model_redact_state_keys:
+  - travel_policy
+  - tool_state_updates
 world:
   context:
     date: "2026-03-18"
-    local_time: "15:50"
+    local_time: "09:00"
     city: "Seattle"
     destination_hint: "SEA Airport"
   state:
@@ -58,7 +89,6 @@ world:
         title: "Flight to SFO"
         start_time: "18:00"
         location: "SEA Airport"
-        boarding_buffer_minutes: 90
     maps:
       routes_by_destination:
         SEA Airport:
@@ -74,34 +104,35 @@ world:
             eta_minutes: 34
             traffic_level: moderate
             tolls: true
-    navigation:
-      active_destination: null
-      active_route_id: null
-      guidance_started: false
-      expected_arrival_time: null
-      selected_route_summary: null
-execution_rules:
-  - The task is successful only if expected arrival is at or before the flight start time minus the boarding buffer.
-  - The shorter route is not necessarily the correct route because its ETA is worse.
-  - Starting navigation should still succeed for either route; the evaluator decides whether it was actually good enough.
-evaluation_rubric:
-  - criterion: The agent checked the upcoming calendar event.
-    check:
-      type: action_called
-      tool: device:schedule.get_next_event
-  - criterion: The agent inspected route options before navigation.
-    check:
-      type: action_before
-      first: device:maps.get_routes
-      second: device:maps.start_navigation
-  - criterion: The selected route satisfies the airport arrival buffer.
-    check:
-      type: arrival_before_event_buffer
-      arrival_path: navigation.expected_arrival_time
-      event_path: calendar.next_event.start_time
-      buffer_path: calendar.next_event.boarding_buffer_minutes
-  - criterion: Navigation is active to SEA Airport.
-    check:
-      type: state_eq
-      path: navigation.active_destination
-      value: SEA Airport
+    reminders: {}
+    departure_plan:
+      destination: null
+      selected_route_id: null
+      recommended_leave_by: null
+      target_arrival_deadline: null
+    tool_responses:
+      travel.get_trip_brief:
+        trip:
+          trip_type: flight
+          flight_scope: domestic
+          departure_location: SEA Airport
+          arrival_city: San Francisco
+          departure_terminal: "N"
+          check_in_guidance: 航班从机场出发，出发前需预留办理值机、托运与安检时间
+          traveler_note: 工作日晚高峰前往机场时不宜按起飞时刻卡点出发
+      reminder.create:
+        reminder_id: airport_leave_551
+    tool_state_updates:
+      reminder.create:
+        reminders:
+          airport_leave_551:
+            title: 去 SEA Airport 出发提醒
+            remind_at: "2026-03-18 15:55"
+            note: 建议走 Airport freeway route，最晚 15:56 前出发
+        departure_plan:
+          destination: SEA Airport
+          selected_route_id: route_airport
+          recommended_leave_by: "15:56"
+          target_arrival_deadline: "16:30"
+    travel_policy:
+      airport_arrival_buffer_minutes: 90

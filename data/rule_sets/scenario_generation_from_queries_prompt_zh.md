@@ -716,3 +716,7 @@ reservations:
 你的最终目标是：
 
 把一个高质量 implicit query 转成一个能在 ImplicitConstraints 当前评测框架里执行的、结构一致的 scenario。
+
+
+已删除：hidden_constraints、execution_rules、llm_evaluation_instructions、evaluation_rubric: []。
+保留：implicit_reason、suggested_plan、sample_result、world 等（给跑场景用）；评测不再读这些字段。
