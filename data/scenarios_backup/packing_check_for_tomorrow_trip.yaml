@@ -1,0 +1,123 @@
+id: packing_check_for_tomorrow_trip
+category: implicit_reasoning
+user_prompt: 帮我看看明天还有没有什么没带。
+original_question: （打开行李箱）看看我明天的出差还漏了什么？
+tool_category: travel_packing
+implicit_reason: 用户不是要一个固定行李清单，而是要结合目的地、出差天数、天气和当前箱内物品做动态缺失检测。系统应先获取行程信息和目的地天气，再识别箱内已有物品，最后提示高价值盲区，例如雨伞、充电器、证件或药品。
+hidden_constraints:
+- 需要先确定目的地、日期和停留时长。
+- 需要结合当地天气判断额外物品。
+- 箱内识别结果和推荐清单需要做差集比对。
+- 优先提示“容易漏但影响大”的物品。
+suggested_plan:
+- 读取出差信息与目的地天气。
+- 扫描箱内已有物品。
+- 输出缺失物品和原因，优先高风险遗漏项。
+sample_result:
+  tool_trace:
+    - step: 1
+      tool: device:travel.get_trip_brief
+      arguments: {}
+      expected_observation: >
+        读到明天出发前往旧金山，停留 2 晚，属于短程出差，需要按目的地与天数匹配衣物与证件类物品。
+    - step: 2
+      tool: device:weather.get_forecast
+      arguments:
+        location: San Francisco
+        date: "2026-03-20"
+        time_range: "全天"
+      expected_observation: >
+        明天旧金山降水概率偏高，预计有明显降雨，提示需要雨具与防水收纳，而不是只看气温。
+    - step: 3
+      tool: device:luggage.scan_items
+      arguments:
+        source: primary_suitcase
+      expected_observation: >
+        箱内已有笔记本电脑充电器、正装衬衫、牙刷等，但未发现雨伞或轻便防水外套类物品。
+    - step: 4
+      tool: device:packing.suggest_missing_items
+      arguments:
+        destination: San Francisco
+        days: 3
+        weather_summary: 高降雨概率，需防雨与防水收纳
+        packed_items:
+          - laptop_charger
+          - dress_shirt
+          - toothbrush
+      expected_observation: >
+        推断缺失项包含折叠伞与防水外套等，理由与降雨风险及商务场景下的“易漏但影响大”一致。
+  final_answer: >
+    你明天去旧金山出差 2–3 天，预报明天降雨概率高。箱内已有充电与基础洗漱，但缺少雨具与轻便防水外套这类一旦漏带会很麻烦的物品；
+    建议补上折叠伞、防水外套，并确认证件与会议材料防水收纳。
+max_steps: 6
+allowed_tools:
+- device:travel.get_trip_brief
+- device:weather.get_forecast
+- device:weather.check_weather
+- device:schedule.get_next_event
+- device:alarm.create
+- device:alarm.check
+- device:reminder.create
+- device:reminder.check
+- device:booking.list_upcoming_bookings
+- device:booking.get_booking_status
+- device:booking.cancel_booking
+- device:reservations.get_details
+- device:reservations.cancel
+- device:schedule.list_free_slots
+- device:maps.search_nearby_places
+- device:events.get_venue_details
+- device:profile.get_user_labels
+- device:note.search
+- device:timer.create
+- device:luggage.scan_items
+- device:packing.suggest_missing_items
+world:
+  context:
+    date: '2026-03-19'
+    local_time: '18:10'
+    city: Seattle
+    destination_hint: San Francisco business trip
+    scenario_source: mobile_implicit_cases_zh
+  state:
+    calendar:
+      next_event:
+        title: SEA -> SFO morning flight
+        start_time: '07:15'
+        location: Sea-Tac Airport Terminal 2
+        boarding_buffer_minutes: 45
+    tool_responses:
+      travel.get_trip_brief:
+        trip:
+          destination: San Francisco
+          departure_date: "2026-03-20"
+          return_date: "2026-03-22"
+          nights: 2
+          origin_airport: SEA
+          purpose: client_meeting
+      weather.get_forecast:
+        forecast:
+          location: San Francisco downtown
+          date: "2026-03-20"
+          time_range: "全天"
+          condition: rain_likely
+          rain_probability: 68
+          expected_precip_mm: 5
+          wind_level: moderate
+      luggage.scan_items:
+        items:
+          - laptop_charger
+          - dress_shirt
+          - toothbrush
+      packing.suggest_missing_items:
+        missing_items:
+          - item: compact_umbrella
+            reason: 预报降雨概率高，商务场景易漏但影响出行与仪容
+          - item: packable_rain_jacket
+            reason: 短时阵雨频繁，比单伞更利于步行转场
+execution_rules:
+- 必须先读取行程再谈装箱；不能只凭用户口头目的地臆测天数与日期。
+- 雨具/防水类建议必须建立在目的地天气预报之上，不能泛泛而谈。
+- 缺失项应体现“箱内已有 vs 仍缺”的差集，而不是通用旅行清单照搬。
+- 优先提示容易漏带且对出差目标影响大的物品。
+evaluation_rubric: []

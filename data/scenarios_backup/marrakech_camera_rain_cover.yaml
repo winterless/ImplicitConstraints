@@ -1,0 +1,78 @@
+id: marrakech_camera_rain_cover
+category: implicit_reasoning
+user_prompt: 我明天去户外拍摄，摄影器材需要带防雨罩吗？
+original_question: I have an outdoor portrait shoot in Marrakech tomorrow morning. Should I bring a rain cover for my camera gear?
+tool_category: weather_gear_risk
+implicit_reason: The user is not asking for weather trivia, but for a gear-risk judgment under time pressure. The system must interpret tomorrow morning's rain probability and exposure conditions to decide whether bringing protection is a worthwhile precaution for expensive camera gear.
+hidden_constraints:
+  - The recommendation must be based on short-window forecast risk, not generic city weather.
+  - Protecting gear from irreversible rain damage matters more than carrying-cost inconvenience.
+  - The final answer should clearly recommend whether the rain cover is worth bringing.
+  - The time-bound nature of the shoot means there may be little opportunity to adapt on site.
+suggested_plan:
+  - Check tomorrow morning's weather forecast for the Marrakech shoot window.
+  - Evaluate whether the rain risk is material enough to justify gear protection.
+  - Return a clear yes/no recommendation with reasons.
+sample_result:
+  tool_trace:
+    - step: 1
+      tool: device:weather.get_forecast
+      arguments:
+        location: Marrakech palm grove
+        date: "2026-04-21"
+        time_range: "07:00-11:00"
+      expected_observation: >
+        预报显示明天上午为 passing_showers，降雨概率约 42%，预计降水量约 1.7mm，
+        且 gear_exposure_risk 为 moderate，说明存在足以打湿机身与镜头的阵雨风险。
+    - step: 2
+      tool: device:reminder.create
+      arguments:
+        title: 外拍前装相机防雨罩
+        remind_at: "2026-04-21T06:45:00"
+        note: 阵雨概率中等，背包侧袋常备防雨罩与干燥布。
+      expected_observation: >
+        已创建出发前提醒，确保在户外人像拍摄窗口前完成防雨准备，而不是临场再找罩子。
+  final_answer: >
+    建议带防雨罩（或等效的机身/镜头防护）。明天上午有过境阵雨且器材暴露风险为中等，相机进水往往不可逆；
+    防雨罩体积成本远低于设备风险，即使最终没下雨也可接受。
+max_steps: 3
+allowed_tools:
+  - device:weather.get_forecast
+  - device:weather.check_weather
+  - device:temperature.check
+  - device:schedule.get_next_event
+  - device:schedule.list_free_slots
+  - device:travel.get_trip_brief
+  - device:reminder.create
+  - device:alarm.create
+  - device:power.get_battery_status
+  - device:events.get_venue_details
+  - device:power.freeze_background_apps
+  - device:power.apply_saving_plan
+  - device:profile.get_user_labels
+  - device:note.search
+  - device:timer.create
+world:
+  context:
+    date: "2026-04-20"
+    local_time: "19:10"
+    city: Marrakech
+    scenario_source: query_top100_batch3
+    source_query_id: seed_dataset_turn_e_part4.jsonl#26
+  state:
+    tool_responses:
+      weather.get_forecast:
+        forecast:
+          location: Marrakech palm grove
+          date: "2026-04-21"
+          time_range: "07:00-11:00"
+          condition: passing_showers
+          rain_probability: 42
+          expected_precip_mm: 1.7
+          wind_level: light
+          gear_exposure_risk: moderate
+execution_rules:
+  - 必须把天气数据转成对相机设备的实际风险判断。
+  - 最终输出应明确建议是否带雨罩，并给出关键理由。
+  - 不能只报降雨概率而不做器材保护建议。
+evaluation_rubric: []

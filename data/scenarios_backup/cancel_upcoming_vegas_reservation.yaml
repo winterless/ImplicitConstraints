@@ -1,0 +1,103 @@
+id: cancel_upcoming_vegas_reservation
+category: implicit_reasoning
+user_prompt: 取消我即将到来的拉斯维加斯预订。
+original_question: Hi there! I need to cancel my upcoming reservation to Las Vegas. Can you assist me with that?
+tool_category: reservation_cancellation
+implicit_reason: The user wants cancellation, but safe execution still requires checking whether the reservation is within a cancelable window and whether there are penalties or better alternatives. The system should inspect the reservation first and then cancel only if policy allows a low-risk action.
+hidden_constraints:
+  - The reservation details and cancellation window must be checked before canceling.
+  - The action should not proceed if the reservation is blocked or carries hidden penalty risk.
+  - If the reservation is safely cancelable, the system should complete the cancellation.
+  - The final output should reflect the actual cancellation outcome, not just a rule summary.
+suggested_plan:
+  - Inspect the reservation details.
+  - Verify refundability and cancellation deadline.
+  - Cancel the reservation if it is still safely cancelable.
+sample_result:
+  tool_trace:
+    - step: 1
+      tool: device:reservations.get_details
+      arguments:
+        reservation_id: res_602
+      expected_observation: >
+        拉斯维加斯酒店 `res_602` 仍在免费取消窗口内（截止次日 12:00），
+        `cancelable=true`，`penalty_amount=0`，`refund_type=full`。
+    - step: 2
+      tool: device:reservations.cancel
+      arguments:
+        reservation_id: res_602
+        confirmed: true
+      expected_observation: >
+        返回 `cancelled=true`，预订状态更新为已取消。
+  final_answer: >
+    我已核对预订详情：你在免费取消期限内，无罚金且全额退款。
+    现已取消拉斯维加斯酒店预订 `res_602`。
+max_steps: 4
+allowed_tools:
+  - device:reservations.get_details
+  - device:reservations.cancel
+  - device:booking.list_upcoming_bookings
+  - device:booking.get_booking_status
+  - device:booking.cancel_booking
+  - device:travel.get_trip_brief
+  - device:schedule.get_next_event
+  - device:schedule.list_free_slots
+  - device:weather.get_forecast
+  - device:reminder.create
+  - device:weather.check_weather
+  - device:alarm.create
+  - device:events.get_venue_details
+  - device:profile.get_user_labels
+  - device:note.search
+  - device:timer.create
+world:
+  context:
+    date: "2026-04-19"
+    local_time: "17:20"
+    city: Las Vegas
+    scenario_source: query_top100_batch2
+    source_query_id: seed_dataset_turn_e_part4.jsonl#173
+  state:
+    reservations:
+      current:
+        reservation_id: res_602
+        status: active
+        cancelable: true
+    tool_responses:
+      reservations.get_details:
+        reservation:
+          reservation_id: res_602
+          type: hotel
+          city: Las Vegas
+          status: active
+          cancelable: true
+          cancellation_deadline: "2026-04-20 12:00"
+          refund_type: full
+          penalty_amount: 0
+          alternatives:
+            - reschedule
+      reservations.cancel:
+        cancelled: true
+        reservation_id: res_602
+    tool_state_updates:
+      reservations.cancel:
+        reservations:
+          current:
+            reservation_id: res_602
+            status: cancelled
+            cancelable: false
+execution_rules:
+  - 必须先检查预订详情，再执行取消。
+  - 若仍在免费取消窗口内，应完成取消而不是只解释政策。
+  - 成功路径应在最终状态中体现预订已取消。
+evaluation_rubric:
+  - criterion: The agent inspected reservation details first.
+    check:
+      type: action_before
+      first: device:reservations.get_details
+      second: device:reservations.cancel
+  - criterion: The reservation was cancelled.
+    check:
+      type: state_eq
+      path: reservations.current.status
+      value: cancelled

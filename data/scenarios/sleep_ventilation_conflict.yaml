@@ -1,0 +1,71 @@
+# evaluation_profile: llm_only
+id: sleep_ventilation_conflict
+category: implicit_reasoning
+user_prompt: 我马上要睡觉了，帮我把卧室窗帘拉开通通风，另外放点助眠音乐。
+
+implicit_reason: 睡觉与「拉开窗帘」存在光线冲突；应建议开窗/新风或短时通风后关帘，或定时关音乐。助眠音乐应设睡眠定时与夜间低音量。
+
+implicit_eval_points:
+  - >
+    【设备常识与光线冲突】是否识别出用户的隐式逻辑漏洞：「拉开窗帘」是为了「通风」，但睡觉时拉开窗帘会导致外部光线（路灯或清晨阳光）严重影响睡眠。优秀的回复应建议或执行「打开窗户/新风系统通风，但保持窗帘关闭」，或者「设置定时，通风 15 分钟后自动关窗并拉上窗帘」；若机械照做一直敞开窗帘，判弱不满足。
+  - >
+    【音频定时器】对于「助眠音乐」，是否在调用 media.play_music 时主动附带了睡眠定时器（Sleep Timer，如播放 45 分钟后自动停止），或在交互中说明会在一定时间后自动关闭；若让音乐整晚循环播放，判不满足。
+  - >
+    【音量抑制】是否主动将对应智能音箱的音量调整至适合夜间睡眠的低音量（如调用 iot.set_volume），若完全未提及音量控制，判弱不满足。
+
+suggested_plan:
+  - 区分通风与遮光，优先关帘+开窗或短时通风方案。
+  - 播放助眠音频并设 sleep timer 与低音量。
+
+sample_result:
+  tool_trace:
+    - step: 1
+      tool: device:home.execute_scene
+      arguments:
+        scene_name: bedroom_night_ventilate_then_shade
+      expected_observation: >
+        或等价：短时开窗、窗帘保持关闭或定时拉回。
+    - step: 2
+      tool: device:media.play_music
+      arguments:
+        playlist_or_station: white_noise_sleep
+        sleep_timer_minutes: 45
+        device_id: bedroom_speaker
+      expected_observation: >
+        带睡眠定时停止。
+    - step: 3
+      tool: device:iot.set_volume
+      arguments:
+        device_id: bedroom_speaker
+        volume_percent: 18
+      expected_observation: >
+        夜间低音量。
+  final_answer: >
+    已开窗通风 15 分钟并关窗，窗帘保持拉拢避光；白噪音已设 45 分钟后停，音量约 18%。
+
+max_steps: 8
+allowed_tools:
+  - device:home.execute_scene
+  - device:media.play_music
+  - device:iot.set_volume
+  - device:reminder.create
+  - device:timer.create
+  - device:sleep_mode.enable
+  - device:profile.get_user_labels
+
+world:
+  context:
+    date: "2026-06-10"
+    local_time: "23:15"
+    city: Shanghai
+    scenario_source: user_batch_v1
+  state:
+    tool_responses:
+      home.execute_scene:
+        applied: true
+        scene_name: bedroom_night_ventilate_then_shade
+      media.play_music:
+        playing: true
+        sleep_timer_minutes: 45
+      iot.set_volume:
+        volume_percent: 18

@@ -1,0 +1,83 @@
+id: weather_affect_outdoor_launch
+category: implicit_reasoning
+user_prompt: 广州今天天气如何？会影响户外发布会吗？
+original_question: 请帮我查询广州今天的天气状况，我要决定是否取消户外产品发布会
+tool_category: weather_launch_decision
+implicit_reason: 用户不是要天气播报，而是要判断户外发布会是否受天气影响。系统需要把天气条件映射到活动可行性和风险等级上，而不是只报温度或晴雨。
+hidden_constraints:
+  - 需要把天气条件转译为活动风险，而不是只列天气数据。
+  - 今天的发布会具有时间刚性，天气判断应服务于取消与否的决策。
+  - 若天气不理想，应提示可行替代方案或保守建议。
+  - 最终输出必须明确是否受影响。
+suggested_plan:
+  - 查询广州今天活动时段的天气。
+  - 判断对户外发布会的影响程度。
+  - 给出是否建议继续举行的结论。
+sample_result:
+  tool_trace:
+  - step: 1
+    tool: device:weather.get_forecast
+    arguments:
+      location: Guangzhou
+      date: "2026-04-18"
+    expected_observation: >
+      下午至傍晚时段强对流风险高：雷雨概率高、风力偏强，对露天搭建与观众安全构成实质威胁。
+  - step: 2
+    tool: device:schedule.get_next_event
+    arguments: {}
+    expected_observation: >
+      今日户外发布时段与恶劣天气窗口重叠，强化“不宜按原计划露天举行”的判断，而非只看气温数字。
+  final_answer: >
+    广州今天下午到傍晚天气对户外发布会明显不利：雷雨概率高且风力偏强，存在安全与设备风险。
+    建议不要按原计划做露天活动，可改室内场地、缩短露天环节或整体延期，并同步通知与会者与搭建方。
+max_steps: 3
+allowed_tools:
+  - device:weather.get_forecast
+  - device:weather.check_weather
+  - device:temperature.check
+  - device:schedule.get_next_event
+  - device:schedule.list_free_slots
+  - device:travel.get_trip_brief
+  - device:reminder.create
+  - device:alarm.create
+  - device:power.get_battery_status
+  - device:events.get_venue_details
+  - device:power.freeze_background_apps
+  - device:power.apply_saving_plan
+  - device:profile.get_user_labels
+  - device:note.search
+  - device:timer.create
+world:
+  context:
+    date: "2026-04-18"
+    local_time: "09:30"
+    city: Guangzhou
+    scenario_source: query_top100_batch1
+    source_query_id: seed_dataset_turn_e_part4.jsonl#37
+  state:
+    calendar:
+      next_event:
+        title: 户外产品发布会（露天）
+        start_time: "2026-04-18T16:00:00"
+        location: 广州·户外广场
+        boarding_buffer_minutes: 0
+    tool_responses:
+      weather.get_forecast:
+        forecast:
+          location: Guangzhou
+          date: "2026-04-18"
+          time_range: "14:00-18:00"
+          condition: thunderstorm
+          rain_probability: 82
+          temperature_c: 33
+          wind_level: strong
+      schedule.get_next_event:
+        event:
+          title: 户外产品发布会（露天）
+          start_time: "2026-04-18T16:00:00"
+          location: 广州·户外广场
+execution_rules:
+  - 必须把预报中的降水、风力、强对流等要素映射为对户外活动的影响与风险等级，不得只做气温或晴雨复读。
+  - 在回答“是否影响”时必须明确表态，并说明主要风险点（安全、设备、体验等至少一类）。
+  - 若雷暴或强降雨概率高、风力偏强等组合已足以构成露天活动风险，应倾向建议改期、改室内或压缩露天环节，而不是仅提示“注意带伞”。
+evaluation_rubric: []

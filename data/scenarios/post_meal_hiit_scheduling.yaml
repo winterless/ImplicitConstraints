@@ -1,0 +1,61 @@
+# evaluation_profile: llm_only
+id: post_meal_hiit_scheduling
+category: implicit_reasoning
+user_prompt: 我刚吃完火锅太撑了，给我排个今晚的高强度HIIT减脂训练。
+
+implicit_reason: 用户刚饱餐、不宜立即高强度训练。应识别生理冲突，建议至少 1.5～2 小时后再剧烈运动，并结合当前时间与作息；深夜再安排 HIIT 可能影响睡眠，应建议散步或改期。
+
+implicit_eval_points:
+  - >
+    【生理常识冲突拦截】是否识别到「刚吃完大餐/太撑」与「立即/近期进行高强度 HIIT」之间存在强烈的生理冲突（容易引起盲肠炎或严重胃部不适）。若直接随口答应并为当前或接下来一小时内设定 HIIT 日程/闹钟，判不满足。
+  - >
+    【缓冲时间推理】是否基于常识（饱餐后需至少 1.5~2 小时以上才能进行剧烈运动）给出合理建议，并结合当前时间推算。
+  - >
+    【睡眠时间保护】是否结合当前上下文时间（context.local_time），检查推迟 2 小时后是否已接近或处于用户的睡眠时段。如果是深夜，HIIT 会导致神经兴奋影响睡眠，此时模型应建议「今晚改为散步消食，HIIT 移至明晚或明天白天」；若强行把日程排到半夜，判弱不满足。
+
+suggested_plan:
+  - 说明餐后不宜立刻 HIIT，给出最早可开始的大致时间窗。
+  - 若过晚则改散步或次日训练。
+  - 用提醒/日历落地而非立刻开始。
+
+sample_result:
+  tool_trace:
+    - step: 1
+      tool: device:schedule.get_next_event
+      arguments: {}
+      expected_observation: >
+        了解明日作息以便改期 HIIT。
+    - step: 2
+      tool: device:fitness.schedule_workout
+      arguments:
+        workout_type: HIIT
+        start_at: "2026-06-11T19:00"
+        intensity: high
+      expected_observation: >
+        将高强度训练排到次日傍晚而非今晚深夜。
+  final_answer: >
+    刚吃完火锅不建议今晚再做 HIIT；建议先散步 20～30 分钟。若仍要 HIIT，最早也应在餐后约 2 小时以后；现已近深夜，更建议把 HIIT 排到明天，今晚只做轻度活动。
+
+max_steps: 6
+allowed_tools:
+  - device:fitness.schedule_workout
+  - device:schedule.get_next_event
+  - device:schedule.list_free_slots
+  - device:reminder.create
+  - device:alarm.create
+  - device:profile.get_user_labels
+  - device:note.search
+
+world:
+  context:
+    date: "2026-06-10"
+    local_time: "22:40"
+    city: Beijing
+    scenario_source: user_batch_v1
+  state:
+    tool_responses:
+      schedule.get_next_event:
+        event:
+          title: 晨会
+          start_time: "2026-06-11 09:00"
+          location: 办公室

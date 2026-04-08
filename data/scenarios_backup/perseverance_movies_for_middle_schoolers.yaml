@@ -1,0 +1,123 @@
+id: perseverance_movies_for_middle_schoolers
+category: implicit_reasoning
+user_prompt: 给初中生挑几部讲坚持和克服困难的电影。
+original_question: Could you recommend a handful of movies that focus on perseverance and overcoming obstacles, suitable for showing to middle school students?
+tool_category: 影视推荐与年龄适配
+implicit_reason: 用户表面上是在请求几部关于坚持的电影，但真实目标是为初中生场景筛出既有鼓舞性、又年龄合适、还能用于课堂或集体观看讨论的少量候选。
+hidden_constraints:
+  - 不能只按主题词匹配，还要满足初中生可接受的内容强度。
+  - 推荐应避开近期已经看过或过于成熟的作品。
+  - 输出应是少量可执行候选，而不是泛化长名单。
+  - 推荐理由应体现主题契合和年龄适配。
+suggested_plan:
+  - 查询用户标签，理解这是面向初中生的集体观看场景。
+  - 检查近期观影记录，避免重复。
+  - 从候选中筛出主题契合且年龄合适的作品。
+sample_result:
+  tool_trace:
+    - step: 1
+      tool: device:profile.get_user_labels
+      arguments: {}
+      expected_observation: >
+        标签显示为初中教师、课堂放映场景，并偏好励志真实故事，说明内容强度与课堂可讨论性比单纯关键词更重要。
+    - step: 2
+      tool: device:media.get_watch_history
+      arguments: {}
+      expected_observation: >
+        近期已放映过 Hidden Figures 与 Wonder，应避免再推荐这两部以免课堂重复。
+    - step: 3
+      tool: device:media.search_recommendations
+      arguments:
+        mood: perseverance classroom
+        unseen_only: true
+      expected_observation: >
+        候选中含多部 perseverance 主题影片；其中 Akeelah and the Bee、Queen of Katwe、McFarland, USA 为 PG，
+        The Pursuit of Happyness 为 PG-13，课堂场景下应优先 PG 且 classroom_fit 更高的条目。
+  final_answer: >
+    建议优先选《拼字比赛的小胜利》（Akeelah and the Bee）或《卡推女王》（Queen of Katwe）：均为 PG，主题紧扣坚持与克服困难，
+    且更适合集体观看讨论。可补一部《麦克法兰》（McFarland, USA）作为运动/团队向备选。暂不优先推荐《当幸福来敲门》这类 PG-13，
+    情绪强度更高，需你确认校规与家长告知后再用。
+max_steps: 5
+allowed_tools:
+  - device:profile.get_user_labels
+  - device:media.get_watch_history
+  - device:media.search_recommendations
+  - device:media.open_on_tv
+  - device:chat.get_group_context
+  - device:podcasts.list_unheard
+  - device:podcasts.play_episode
+  - device:schedule.list_free_slots
+  - device:reminder.create
+  - device:timer.create
+  - device:note.search
+  - device:schedule.get_next_event
+  - device:note.open
+  - device:alarm.create
+world:
+  context:
+    date: "2026-05-02"
+    local_time: "17:20"
+    city: Boston
+    scenario_source: query_top100_batch4
+    source_query_id: seed_dataset_turn_e_part1.jsonl#183
+  state:
+    tool_responses:
+      profile.get_user_labels:
+        labels:
+          - middle_school_teacher
+          - classroom_screening
+          - prefers_inspiring_true_stories
+      media.get_watch_history:
+        watch_history:
+          - title: Hidden Figures
+            watched_at: "2026-03-20"
+            audience_context: class_screening
+          - title: Wonder
+            watched_at: "2026-04-12"
+            audience_context: family
+      media.search_recommendations:
+        recommendations:
+          - title: Akeelah and the Bee
+            tags:
+              - perseverance
+              - school
+              - uplifting
+            age_rating: PG
+            runtime_minutes: 112
+            tone: hopeful
+            classroom_fit: high
+            previously_watched: false
+          - title: McFarland, USA
+            tags:
+              - perseverance
+              - sports
+              - teamwork
+            age_rating: PG
+            runtime_minutes: 129
+            tone: inspiring
+            classroom_fit: medium
+            previously_watched: false
+          - title: The Pursuit of Happyness
+            tags:
+              - perseverance
+              - biography
+            age_rating: PG-13
+            runtime_minutes: 117
+            tone: emotional
+            classroom_fit: medium
+            previously_watched: false
+          - title: Queen of Katwe
+            tags:
+              - perseverance
+              - coming_of_age
+            age_rating: PG
+            runtime_minutes: 124
+            tone: inspiring
+            classroom_fit: high
+            previously_watched: false
+execution_rules:
+  - 必须结合课堂/初中生场景筛选，而不是只按 perseverance 标签堆片单。
+  - 默认优先 PG 与较高 classroom_fit；对 PG-13 应显式提示强度与审批风险。
+  - 应利用观影历史避免重复推荐近期已放映作品。
+  - 输出控制在少量候选，并说明主题契合与年龄/课堂适配理由。
+evaluation_rubric: []

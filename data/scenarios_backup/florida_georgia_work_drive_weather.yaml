@@ -1,0 +1,119 @@
+id: florida_georgia_work_drive_weather
+category: implicit_reasoning
+user_prompt: 明天从佛州开车去乔治亚州出差，天气会不会导致延误或带来危险？
+original_question: I'm planning to drive from Florida to Georgia tomorrow for work. Should I be concerned about any weather warnings or severe conditions along the way?
+tool_category: route_weather_risk
+implicit_reason: The user is not asking for a generic weather summary, but for a go/no-go risk judgment on a work drive with implicit timing pressure. The system must combine route duration, severe weather along the corridor, and the next-day work deadline to decide whether the trip is merely inconvenient or genuinely risky.
+hidden_constraints:
+  - Weather risk must be assessed along the actual drive corridor, not at only the origin or destination city.
+  - The user's work commitment creates an arrival deadline, so delay risk matters in addition to safety risk.
+  - The final answer should state whether the user should be concerned and why.
+  - If conditions are severe, the answer should imply a safer alternative such as earlier departure or postponement.
+suggested_plan:
+  - Read the next work-related event to recover the implied arrival deadline.
+  - Check route options and baseline ETA to Georgia.
+  - Check tomorrow morning weather hazards along the route corridor.
+sample_result:
+  tool_trace:
+    - step: 1
+      tool: device:schedule.get_next_event
+      arguments: {}
+      expected_observation: >
+        明天上午在萨凡纳办公室有现场审计，开始时间 09:30，并带有到岗缓冲要求，构成隐含到达截止。
+    - step: 2
+      tool: device:travel.get_trip_brief
+      arguments:
+        destination: Savannah Office
+        departure_date: "2026-04-20"
+      expected_observation: >
+        从杰克逊维尔出发沿 I-95 北上基线 ETA 约 165 分钟，与清晨出发窗口一起决定是否能留出足够缓冲。
+    - step: 3
+      tool: device:weather.get_forecast
+      arguments:
+        location: Jacksonville to Savannah I-95 corridor
+        date: "2026-04-20"
+        time_range: "06:00-10:00"
+      expected_observation: >
+        沿途有强雷暴与山洪预警，路段能见度差、预计额外延误数十分钟，道路风险等级偏高。
+  final_answer: >
+    值得担心。明早动身时段沿线有强雷暴与山洪相关预警，能见度与路面风险都偏高，且系统预计显著延误；
+    叠加你到萨凡纳办公室 09:30 的现场审计，缓冲会被压缩。
+    建议比平常更早出发、途中关注封路与改道路况，若风险持续偏高则考虑改期出差或改乘不受该路段影响的方案。
+max_steps: 4
+allowed_tools:
+  - device:weather.get_forecast
+  - device:weather.check_weather
+  - device:temperature.check
+  - device:schedule.get_next_event
+  - device:schedule.list_free_slots
+  - device:travel.get_trip_brief
+  - device:reminder.create
+  - device:alarm.create
+  - device:power.get_battery_status
+  - device:events.get_venue_details
+  - device:power.freeze_background_apps
+  - device:power.apply_saving_plan
+  - device:profile.get_user_labels
+  - device:note.search
+  - device:timer.create
+world:
+  context:
+    date: "2026-04-19"
+    local_time: "18:20"
+    city: Jacksonville
+    destination_hint: Savannah Office
+    scenario_source: query_top100_batch2
+    source_query_id: seed_dataset_turn_e_part2.jsonl#31
+  state:
+    calendar:
+      next_event:
+        title: Field audit at Savannah Office
+        start_time: "09:30"
+        location: Savannah Office
+        boarding_buffer_minutes: 20
+    maps:
+      routes_by_destination:
+        Savannah Office:
+          - route_id: route_i95
+            label: I-95 northbound
+            distance_km: 225
+            eta_minutes: 165
+            traffic_level: moderate
+            tolls: false
+          - route_id: route_inland
+            label: Inland reroute via US-301
+            distance_km: 264
+            eta_minutes: 210
+            traffic_level: light
+            tolls: false
+    tool_responses:
+      schedule.get_next_event:
+        event:
+          title: Field audit at Savannah Office
+          start_time: "2026-04-20 09:30"
+          location: Savannah Office
+          boarding_buffer_minutes: 20
+      travel.get_trip_brief:
+        trip:
+          origin_city: Jacksonville
+          destination: Savannah Office
+          travel_date: "2026-04-20"
+          primary_route_label: I-95 northbound
+          baseline_eta_minutes: 165
+      weather.get_forecast:
+        forecast:
+          location: Jacksonville to Savannah I-95 corridor
+          date: "2026-04-20"
+          time_range: "06:00-10:00"
+          condition: severe_thunderstorms
+          weather_alerts:
+            - severe thunderstorm warning near Brunswick 07:10-08:40
+            - flash flood advisory on I-95 segment mile 42-77
+          road_risk_level: high
+          visibility: poor
+          expected_delay_minutes: 55
+execution_rules:
+  - 必须同时用到「下一份工作相关日程的到达要求」「路线基线 ETA」与「走廊天气/延误」三类信息，不能只报终点城市天气。
+  - 必须明确回答是否值得担心，并点出是安全、延误还是缓冲被压缩等关键原因。
+  - 若沿线高风险天气显著增加延误且挤压到岗缓冲，应给出偏谨慎的结论并提示更早出发或替代方案，而非仅描述路况形容词。
+evaluation_rubric: []

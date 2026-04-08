@@ -1,0 +1,71 @@
+# evaluation_profile: llm_only
+id: weekend_trip_pet_care
+category: implicit_reasoning
+user_prompt: 我这周末要临时出差两天，帮我把家里的自动喂食器设成每天喂两顿猫粮。
+
+implicit_reason: 出差前须确认粮仓余量是否够两天；宠物还需饮水与异常监控；可建议摄像头活动侦测以防卡粮。
+
+implicit_eval_points:
+  - >
+    【余粮物理核查】在设定新出食计划前，是否通过喂食器的 API（如 pet_feeder.get_status）检查当前粮仓（Hopper）内的剩余猫粮是否足够支撑两天的份量。如果只剩底层的渣，设定计划也无济于事。若不检查余粮直接设置日程，判不满足。
+  - >
+    【饮水维度的补全】常识：宠物独居不仅需要食物还需要水。是否主动提醒用户检查自动饮水机的剩余水量，或者是否需要开启饮水机的循环模式；若只顾食物完全忽略水源，判弱不满足。
+  - >
+    【安全与监控联动】结合「出差两天（家中无人）」，是否主动建议联动家里的监控摄像头（如开启宠物活动侦测告警），以防喂食器卡粮或其他意外情况发生。能体现全屋智能联动的判优，未提及则不做硬性扣分，但若被问及仍不建议则判弱。
+
+suggested_plan:
+  - 查喂食器余粮与在线状态。
+  - 设每日两顿并提示补水与摄像头告警。
+
+sample_result:
+  tool_trace:
+    - step: 1
+      tool: device:pet_feeder.get_status
+      arguments: {}
+      expected_observation: >
+        hopper 余量可覆盖 2 天或不足需补粮。
+    - step: 2
+      tool: device:pet_feeder.set_schedule
+      arguments:
+        meals_per_day: 2
+        times:
+          - "08:00"
+          - "19:00"
+      expected_observation: >
+        日程写入成功。
+    - step: 3
+      tool: device:camera.set_alert_mode
+      arguments:
+        mode: pet_motion
+      expected_observation: >
+        活动侦测开启。
+  final_answer: >
+    余粮够两天；已设每日 8:00/19:00 两顿。请确认饮水机水量；已建议打开客厅摄像头宠物侦测告警。
+
+max_steps: 8
+allowed_tools:
+  - device:pet_feeder.get_status
+  - device:pet_feeder.set_schedule
+  - device:camera.set_alert_mode
+  - device:home.get_safety_status
+  - device:reminder.create
+  - device:profile.get_user_labels
+  - device:note.search
+
+world:
+  context:
+    date: "2026-06-10"
+    local_time: "07:00"
+    city: Shenzhen
+    scenario_source: user_batch_v1
+  state:
+    tool_responses:
+      pet_feeder.get_status:
+        hopper:
+          remaining_portions: 8
+          low_warning: false
+        online: true
+      pet_feeder.set_schedule:
+        schedule_id: pf_sched_01
+      camera.set_alert_mode:
+        enabled: true

@@ -1,0 +1,74 @@
+# evaluation_profile: llm_only
+id: gift_delivery_timing_address
+category: implicit_reasoning
+user_prompt: 下周二是我妈生日，帮我在网上挑个护颈仪送给她。
+
+implicit_reason: 给母亲的礼物须确认**收件地址为母亲地址**；须在「下周二」前可送达，排除过慢物流；送长辈应兼顾评价与功能差异，不只选最低价。
+
+implicit_eval_points:
+  - >
+    【收件人地址逻辑】是否识别出这是送给「妈妈」的礼物。在执行挑选或加入购物车/下单操作前，是否主动确认或切换收件地址为「妈妈的地址」（可通过 profile.get_relationships/address 获取或询问用户），若默认使用用户本人的家庭/公司地址，判不满足。
+  - >
+    【物流时效反推】是否结合「下周二」这个绝对截止时间，在调用电商工具（如 shopping.search_products）时，核对商品的预计送达时间（ETA）。必须排除那些明确显示「下周三及以后送达」的预售或慢速物流商品；若推荐了物流无法在生日当天或之前送达的选项，判不满足。
+  - >
+    【口碑/品质筛选】作为送长辈的礼物，是否在检索时隐式加上了评价/销量等品质过滤条件，并在推荐时给出2-3个有依据的选项及差异（如力度、热敷功能）；若只随便丢一个最便宜的链接，判弱不满足。
+
+suggested_plan:
+  - 查询母亲收件地址。
+  - 搜索护颈仪并过滤下周二前可达、高评分。
+  - 对比 2～3 款说明差异，不直接代下单除非确认地址。
+
+sample_result:
+  tool_trace:
+    - step: 1
+      tool: device:relationships.get_contact_address
+      arguments:
+        relationship: mother
+      expected_observation: >
+        返回妈妈城市与详细地址，用于配送。
+    - step: 2
+      tool: device:shopping.search_products
+      arguments:
+        query: 护颈仪 颈椎按摩
+        max_delivery_date: "2026-06-16"
+        min_rating: 4.5
+      expected_observation: >
+        仅含能在生日前送达的 SKU；排除慢物流。
+  final_answer: >
+    已按妈妈地址筛选；推荐 A/B/C 三款并标出热敷与力度差异；均在下周二前可达，请勿用默认本人地址下单。
+
+max_steps: 8
+allowed_tools:
+  - device:shopping.search_products
+  - device:relationships.get_contact_address
+  - device:profile.get_user_labels
+  - device:note.search
+  - device:reminder.create
+  - device:commerce.get_recent_order_status
+
+world:
+  context:
+    date: "2026-06-10"
+    local_time: "14:00"
+    city: Guangzhou
+    scenario_source: user_batch_v1
+  state:
+    tool_responses:
+      relationships.get_contact_address:
+        contact:
+          relationship: mother
+          name: 李女士
+          city: 佛山
+          address_full: 佛山市南海区……
+      shopping.search_products:
+        products:
+          - sku: neck_a
+            title: 护颈仪 A
+            eta_delivery: "2026-06-14"
+            rating: 4.8
+            price_cny: 399
+          - sku: neck_b_slow
+            title: 护颈仪 预售
+            eta_delivery: "2026-06-20"
+            rating: 4.2
+            price_cny: 199

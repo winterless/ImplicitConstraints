@@ -1,0 +1,113 @@
+id: family_friendly_animated_movie_under_90
+category: implicit_reasoning
+user_prompt: 帮我找几部 90 分钟以内、适合全家一起看的动画电影。
+original_question: I'm looking for a family‑friendly animated movie that runs under 90 minutes. Can you suggest a few titles that match this description?
+tool_category: 影视推荐与时长约束
+implicit_reason: 用户表面上是在请求几部动画片，但真实目标是筛出适合家庭共看、时长严格受限、且最好没有近期重复观看的轻量候选。
+hidden_constraints:
+  - 90 分钟以内应被视为硬约束，而不是模糊偏好。
+  - family-friendly 不只是动画标签，还要兼顾语言、暴力和整体氛围。
+  - 推荐应避免近期已看过的作品。
+  - 输出应是几部优先级较高的候选，而不是把所有动画片列出来。
+suggested_plan:
+  - 查询用户标签，理解家庭共看场景。
+  - 检查近期观影记录，排除重复。
+  - 从候选中筛出时长和内容都合适的作品。
+sample_result:
+  tool_trace:
+    - step: 1
+      tool: device:profile.get_user_labels
+      arguments: {}
+      expected_observation: >
+        标签显示家庭模式、低龄儿童在场、偏好较短片长，推荐应偏 G 级、轻松向动画。
+    - step: 2
+      tool: device:media.get_watch_history
+      arguments: {}
+      expected_observation: >
+        近期已看过《Luca》《The Peanuts Movie》，新推荐应避免无意义重复。
+    - step: 3
+      tool: device:media.search_recommendations
+      arguments:
+        tags:
+          - animation
+          - family
+        max_runtime_minutes: 90
+      expected_observation: >
+        候选中含多部 90 分钟以内动画；其中《Moana》时长超过 90 分钟，应被硬约束剔除。
+  final_answer: >
+    在「90 分钟以内 + 全家向动画」的硬约束下，可优先选《小熊维尼历险记》《变身国王》《玩具总动员》三部：
+    时长分别约 74、78、81 分钟，分级偏 G、氛围适合家庭共看。
+    《海洋奇缘》虽热门但超过 90 分钟，不建议纳入本轮候选。
+max_steps: 5
+allowed_tools:
+  - device:profile.get_user_labels
+  - device:media.get_watch_history
+  - device:media.search_recommendations
+  - device:media.open_on_tv
+  - device:chat.get_group_context
+  - device:podcasts.list_unheard
+  - device:podcasts.play_episode
+  - device:schedule.list_free_slots
+  - device:reminder.create
+  - device:timer.create
+  - device:note.search
+  - device:schedule.get_next_event
+  - device:note.open
+  - device:alarm.create
+world:
+  context:
+    date: "2026-05-03"
+    local_time: "18:48"
+    city: San Jose
+    scenario_source: query_top100_batch4
+    source_query_id: seed_dataset_turn_e_part1.jsonl#98
+  state:
+    tool_responses:
+      profile.get_user_labels:
+        labels:
+          - family_mode
+          - young_kids_present
+          - prefers_short_runtime
+      media.get_watch_history:
+        watch_history:
+          - title: Luca
+            watched_at: "2026-04-14"
+            user_rating: 5
+          - title: The Peanuts Movie
+            watched_at: "2026-03-22"
+            user_rating: 4
+      media.search_recommendations:
+        recommendations:
+          - title: The Many Adventures of Winnie the Pooh
+            tags:
+              - animation
+              - family
+            age_rating: G
+            runtime_minutes: 74
+            previously_watched: false
+          - title: The Emperor's New Groove
+            tags:
+              - animation
+              - comedy
+            age_rating: G
+            runtime_minutes: 78
+            previously_watched: false
+          - title: Toy Story
+            tags:
+              - animation
+              - family
+            age_rating: G
+            runtime_minutes: 81
+            previously_watched: false
+          - title: Moana
+            tags:
+              - animation
+              - adventure
+            age_rating: PG
+            runtime_minutes: 107
+            previously_watched: false
+execution_rules:
+  - 必须把 90 分钟以内视为硬约束。
+  - 应优先推荐适合低龄家庭共看的动画片。
+  - 应排除近期已看过或明显超时长的候选。
+evaluation_rubric: []

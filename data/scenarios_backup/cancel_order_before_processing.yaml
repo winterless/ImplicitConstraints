@@ -1,0 +1,92 @@
+id: cancel_order_before_processing
+category: implicit_reasoning
+user_prompt: 这笔订单在处理前我还能取消吗？
+original_question: Hi, I need some help with an order I placed by mistake. I’d like to cancel it before it gets processed. Can you help me with that?
+tool_category: commerce_order_cancellation
+implicit_reason: The user is not merely asking to cancel an order, but to avoid the irreversible point where processing begins. The system must inspect the order's live processing state, determine whether the cancellation window is still open, and avoid a blind cancel call if the order has already moved too far.
+hidden_constraints:
+  - The order status must be checked before cancellation.
+  - The decisive question is whether processing has already started.
+  - If the order is no longer cancellable, the agent should not force the action.
+  - The final output should explain the real-time boundary and fallback path.
+suggested_plan:
+  - Read the recent order status.
+  - Check whether processing has already begun.
+  - Cancel only if the order is still within the cancellable window; otherwise stop with alternatives.
+sample_result:
+  tool_trace:
+    - step: 1
+      tool: device:commerce.get_recent_order_status
+      arguments:
+        placed_within_days: 1
+      expected_observation: >
+        应读到订单 `ord_908` 当前已经处于 `warehouse_picking`，
+        `processing_started=true` 且 `cancelable=false`，说明已经越过“处理前可取消”的关键边界。
+    - step: 2
+      tool: device:commerce.get_order_policy
+      arguments:
+        order_id: ord_908
+      expected_observation: >
+        规则侧应继续确认该订单已不允许正常取消，只能走发货后退货或联系支持拦截的替代路径，
+        从而支撑“不能再取消”的最终结论。
+  final_answer: >
+    这笔订单现在已经开始处理了，所以不能再把它当作“处理前取消”来完成。
+    更可行的替代方案是等收货后发起退货，或者尽快联系支持团队尝试拦截发货。
+max_steps: 4
+allowed_tools:
+  - device:commerce.get_recent_order_status
+  - device:commerce.cancel_order
+  - device:commerce.list_recent_orders
+  - device:commerce.get_order_policy
+  - device:profile.get_user_labels
+  - device:schedule.get_next_event
+  - device:schedule.list_free_slots
+  - device:reminder.create
+  - device:timer.create
+  - device:note.search
+  - device:notifications.set_delivery_policy
+  - device:alarm.create
+  - device:note.open
+world:
+  context:
+    date: "2026-04-19"
+    local_time: "14:55"
+    city: Seattle
+    scenario_source: query_top100_batch2
+    source_query_id: seed_dataset_turn_e_part4.jsonl#123
+  state:
+    orders:
+      current:
+        order_id: ord_908
+        status: warehouse_picking
+        cancelable: false
+    tool_responses:
+      commerce.get_recent_order_status:
+        order:
+          order_id: ord_908
+          item_name: Portable monitor stand
+          placed_at: "2026-04-19 13:42"
+          status: warehouse_picking
+          processing_started: true
+          cancelable: false
+          payment_captured: true
+          alternatives:
+            - start_return_after_delivery
+            - contact_support_for_intercept
+      commerce.get_order_policy:
+        policy:
+          order_id: ord_908
+          cancellation_allowed: false
+          block_reason: processing_started
+          alternatives:
+            - start_return_after_delivery
+            - contact_support_for_intercept
+      commerce.cancel_order:
+        cancelled: false
+        order_id: ord_908
+execution_rules:
+  - 必须先检查订单状态，再判断是否可取消。
+  - 如果订单已进入 processing 阶段，不能把取消视为已完成。
+  - 这种阻塞场景下不得硬调用取消工具充当成功；正确答案应停在解释边界和替代方案。
+  - 最终输出应说明为什么已错过安全取消窗口以及可行替代方案。
+evaluation_rubric: []

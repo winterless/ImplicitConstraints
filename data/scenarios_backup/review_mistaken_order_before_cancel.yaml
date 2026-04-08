@@ -1,0 +1,108 @@
+id: review_mistaken_order_before_cancel
+category: implicit_reasoning
+user_prompt: 我下错单了，但先别直接取消，先帮我确认是哪一笔。
+original_question: Hi! I need to cancel an order I placed by mistake. Can you help me with that?
+tool_category: 电商订单取消
+implicit_reason: 用户表面上是在请求取消误下单，但真实目标是先识别哪一笔才是误下单对象，并在确认后再执行，以避免误取消相似订单。
+hidden_constraints:
+  - 近期存在多笔相似订单，不能默认最近一笔就是误下单目标。
+  - 必须先列出候选并识别哪一笔最可能是误下单。
+  - 在未完成目标确认前，不应直接执行取消。
+  - 应说明若取消后会产生的退款或优惠影响。
+suggested_plan:
+  - 列出近期相似订单候选。
+  - 查询最可疑那一笔的状态与规则。
+  - 停在待用户确认的安全节点，不直接取消。
+sample_result:
+  tool_trace:
+    - step: 1
+      tool: device:commerce.list_recent_orders
+      arguments: {}
+      expected_observation: >
+        近期有两笔几乎相同的耳机订单：黑色 `ord_1132`（19:05）与白色 `ord_1133`（18:58），
+        不能默认“最新一笔”就是要取消的误下单。
+    - step: 2
+      tool: device:commerce.get_recent_order_status
+      arguments:
+        keyword: Wireless Earbuds, black
+        placed_within_days: 1
+      expected_observation: >
+        命中黑色耳机订单 `ord_1132`，状态仍为 awaiting_fulfillment，尚未进入发货处理，技术上仍具备在窗口内取消的前提。
+    - step: 3
+      tool: device:commerce.get_order_policy
+      arguments:
+        order_id: ord_1132
+      expected_observation: >
+        取消截止约在 20:00 前，退款可走原支付渠道，且 promo 积分不回冲，说明取消前必须确认目标订单以免误伤另一笔。
+  final_answer: >
+    我看到两笔相近的耳机订单，无法单凭一句话判断你要取消黑色还是白色。请先告诉我误下单的是哪一笔（`ord_1132` 或 `ord_1133`）。
+    以黑色订单为例，当前仍在履约前阶段且在取消窗口内，取消后预计按原路退款；我暂时不会调用取消，等你确认具体订单号后再继续。
+max_steps: 5
+allowed_tools:
+  - device:commerce.list_recent_orders
+  - device:commerce.get_recent_order_status
+  - device:commerce.get_order_policy
+  - device:commerce.cancel_order
+  - device:profile.get_user_labels
+  - device:schedule.get_next_event
+  - device:schedule.list_free_slots
+  - device:reminder.create
+  - device:timer.create
+  - device:note.search
+  - device:notifications.set_delivery_policy
+  - device:alarm.create
+  - device:note.open
+world:
+  context:
+    date: "2026-04-25"
+    local_time: "19:42"
+    city: Portland
+    scenario_source: query_top100_batch4
+    source_query_id: seed_dataset_turn_e_part5.jsonl#33
+  state:
+    orders:
+      current:
+        order_id: ord_1132
+        status: awaiting_fulfillment
+        cancelable: true
+    tool_responses:
+      commerce.list_recent_orders:
+        orders:
+          - order_id: ord_1132
+            item_name: Wireless Earbuds, black
+            placed_at: "2026-04-25 19:05"
+            status: awaiting_fulfillment
+          - order_id: ord_1133
+            item_name: Wireless Earbuds, white
+            placed_at: "2026-04-25 18:58"
+            status: awaiting_fulfillment
+      commerce.get_recent_order_status:
+        order:
+          order_id: ord_1132
+          item_name: Wireless Earbuds, black
+          placed_at: "2026-04-25 19:05"
+          status: awaiting_fulfillment
+          cancelable: true
+          processing_started: false
+      commerce.get_order_policy:
+        policy:
+          order_id: ord_1132
+          cancellation_deadline: "2026-04-25 20:00"
+          refund_type: original_payment_method
+          refund_delay_hours: 6
+          promo_credit_reversal: false
+      commerce.cancel_order:
+        cancelled: true
+        order_id: ord_1132
+    tool_state_updates:
+      commerce.cancel_order:
+        orders:
+          current:
+            order_id: ord_1132
+            status: cancelled
+            cancelable: false
+execution_rules:
+  - 必须先枚举相似订单，再谈“哪一笔是误下单”；不能默认最近一单。
+  - 在存在多笔相似订单时，未获用户点名确认前不得调用取消。
+  - 正确完成条件是停在待确认状态，并说明取消窗口与退款/优惠影响。
+evaluation_rubric: []

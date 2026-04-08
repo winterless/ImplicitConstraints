@@ -1,0 +1,89 @@
+id: cancel_just_placed_order_quickly
+category: implicit_reasoning
+user_prompt: 取消我刚下的订单。
+original_question: Hi! I need to cancel an order I just placed. Can you help me with that?
+tool_category: 电商订单取消
+implicit_reason: 用户不是单纯想“按一下取消”，而是要赶在订单进入履约前安全撤回刚下单的购买。系统需要先核对订单是否还在短暂取消窗口内，再决定是否立刻执行。
+hidden_constraints:
+  - “刚下单”意味着存在真实的时间窗口压力。
+  - 必须先确认订单尚未进入处理阶段。
+  - 如果仍在窗口内，应尽快完成取消，而不是只给出泛化建议。
+  - 若已过窗口，则应说明阻塞原因和替代路径。
+suggested_plan:
+  - 查询刚下单订单的当前状态。
+  - 判断是否仍处于可取消窗口。
+  - 若可取消则立即执行。
+sample_result:
+  tool_trace:
+    - step: 1
+      tool: device:commerce.get_recent_order_status
+      arguments:
+        placed_within_days: 1
+      expected_observation: >
+        应读到最近订单是 `ord_804`，13:58 下单，当前仍为 `awaiting_fulfillment`，
+        `processing_started=false`，且取消截止时间是 14:15，说明仍在可撤回窗口内。
+    - step: 2
+      tool: device:commerce.cancel_order
+      arguments:
+        order_id: ord_804
+        confirmed: true
+      expected_observation: >
+        订单应被成功取消，且最终状态更新为 `cancelled`，
+        说明系统没有停留在解释层，而是抓住短时间窗口完成撤回。
+  final_answer: >
+    已帮你把刚下的订单 `ord_804` 取消掉了。它原本还在履约前的可取消窗口内，
+    所以我直接完成了撤回；现在订单状态应已变成已取消。
+max_steps: 4
+allowed_tools:
+  - device:commerce.get_recent_order_status
+  - device:commerce.cancel_order
+  - device:commerce.list_recent_orders
+  - device:commerce.get_order_policy
+  - device:profile.get_user_labels
+  - device:schedule.get_next_event
+  - device:schedule.list_free_slots
+  - device:reminder.create
+  - device:timer.create
+  - device:note.search
+  - device:notifications.set_delivery_policy
+  - device:alarm.create
+  - device:note.open
+world:
+  context:
+    date: "2026-04-21"
+    local_time: "14:06"
+    city: Seattle
+    scenario_source: query_top100_batch4
+    source_query_id: seed_dataset_turn_e_part5.jsonl#13
+  state:
+    orders:
+      current:
+        order_id: ord_804
+        status: awaiting_fulfillment
+        cancelable: true
+    tool_responses:
+      commerce.get_recent_order_status:
+        order:
+          order_id: ord_804
+          item_name: Desk lamp
+          placed_at: "2026-04-21 13:58"
+          status: awaiting_fulfillment
+          processing_started: false
+          cancelable: true
+          cancellation_deadline: "2026-04-21 14:15"
+      commerce.cancel_order:
+        cancelled: true
+        order_id: ord_804
+    tool_state_updates:
+      commerce.cancel_order:
+        orders:
+          current:
+            order_id: ord_804
+            status: cancelled
+            cancelable: false
+execution_rules:
+  - 必须先检查订单状态和取消窗口，再执行取消。
+  - 当订单仍在窗口内时，应完成取消。
+  - 不应只返回“可以取消”的建议，成功路径必须真正触发取消。
+  - 最终状态应体现订单已取消。
+evaluation_rubric: []

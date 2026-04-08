@@ -1,0 +1,122 @@
+id: huangshan_couple_photos_last_year
+category: implicit_reasoning
+user_prompt: 帮我找出去年的黄山照片里，我和老婆同框的那些。
+original_question: 帮我查找我去年在黄山上拍的和老婆的照片。
+tool_category: photo_people
+implicit_reason: 用户表面上是在找照片，实际隐含了地点、人物和时间三个联合筛选条件。地点应优先用照片 GPS 判断，GPS 缺失时再用黄山视觉地标匹配补足；人物匹配应尽量在端侧做人脸识别以保护隐私；“去年”需要根据当前日期换算成明确的时间范围。
+hidden_constraints:
+- 优先使用照片元数据中的 GPS 作为地点真值。
+- 若 GPS 缺失，可退化到黄山视觉地标识别。
+- 人脸比对需要同时匹配“我”和“老婆”。
+- 时间范围应限定为上一自然年或过去一年，并在实现时固定口径。
+suggested_plan:
+- 先按时间范围筛出去年拍摄的照片。
+- 使用 GPS 锁定黄山；若缺失 GPS，再做黄山视觉匹配。
+- 对候选照片进行端侧双人人脸匹配，只保留我和老婆同时出现的照片。
+sample_result:
+  tool_trace:
+    - step: 1
+      tool: device:photos.search_by_metadata
+      arguments:
+        date_from: "2025-01-01"
+        date_to: "2025-12-31"
+        location_keywords:
+          - 黄山
+        require_faces:
+          - self
+          - spouse
+      expected_observation: >
+        命中若干 2025 年拍摄、GPS 或地标指向黄山、且同时识别到本人与配偶人像的照片条目。
+    - step: 2
+      tool: device:photos.prepare_share_bundle
+      arguments:
+        photo_ids:
+          - hs_2025_1002_a
+          - hs_2025_1002_b
+      expected_observation: >
+        生成仅含上述同框照片的分享包，便于复查或转发，避免混入无关图片。
+  final_answer: >
+    已在 2025 年时间范围内筛出黄山场景、且你与爱人均入镜的照片，主要包括 10 月初登山日拍摄的一组同框合影。
+    若你需要，我可以把这些文件打成分享包或继续在相册里按日期微调筛选。
+max_steps: 6
+allowed_tools:
+- device:photos.search_by_metadata
+- device:photos.prepare_share_bundle
+- device:messaging.open_contact_thread
+- device:schedule.get_next_event
+- device:schedule.list_free_slots
+- device:note.search
+- device:note.open
+- device:reminder.create
+- device:reminder.open
+- device:weather.get_forecast
+- device:weather.check_weather
+- device:chat.get_group_context
+- device:maps.search_nearby_places
+- device:profile.get_user_labels
+- device:timer.create
+- device:alarm.create
+world:
+  context:
+    date: '2026-03-19'
+    local_time: '18:10'
+    city: Seattle
+    destination_hint: Downtown Office
+    scenario_source: mobile_implicit_cases_zh
+  state:
+    calendar:
+      next_event:
+        title: Upcoming task
+        start_time: '19:30'
+        location: Downtown Office
+        boarding_buffer_minutes: 30
+    maps:
+      routes_by_destination:
+        Downtown Office:
+        - route_id: route_fast
+          label: Fast route
+          distance_km: 18
+          eta_minutes: 22
+          traffic_level: moderate
+          tolls: false
+        - route_id: route_safe
+          label: Safer route
+          distance_km: 21
+          eta_minutes: 28
+          traffic_level: light
+          tolls: true
+    navigation:
+      active_destination: null
+      active_route_id: null
+      guidance_started: false
+      expected_arrival_time: null
+      selected_route_summary: null
+    tool_responses:
+      photos.search_by_metadata:
+        photos:
+          - photo_id: hs_2025_1002_a
+            taken_at: "2025-10-02T09:15:00"
+            gps_region: Huangshan
+            landmark_tag: Huangshan
+            faces:
+              - self
+              - spouse
+          - photo_id: hs_2025_1002_b
+            taken_at: "2025-10-02T11:40:00"
+            gps_region: Huangshan
+            gps_missing: false
+            faces:
+              - self
+              - spouse
+      photos.prepare_share_bundle:
+        bundle:
+          bundle_id: bundle_hs_couple_2025
+          photo_ids:
+            - hs_2025_1002_a
+            - hs_2025_1002_b
+          ready: true
+execution_rules:
+- 地点判定应优先采用照片 GPS/地理标签；仅当缺失时再使用黄山视觉地标匹配作补全。
+- 人脸比对必须同屏同时命中「我」与「老婆」，不能只满足其中一人。
+- 「去年」在本场景中固定按 2025 自然年理解，与当前系统日期一致，不得漂移成模糊「最近一年」而不说明。
+evaluation_rubric: []

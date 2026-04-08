@@ -1,0 +1,115 @@
+id: cancel_tea_kettle_order_recent
+category: implicit_reasoning
+user_prompt: 取消我的茶壶订单。
+original_question: Hi, I’d like to cancel my recent order for a Tea Kettle, please.
+tool_category: 电商订单取消
+implicit_reason: 用户表面上是要取消一个茶壶订单，但真实目标是安全地撤销最近的一笔消费，而不是误取消或在已进入处理阶段后硬执行。系统需要先核对最近订单状态与退款影响，再决定是否取消。
+hidden_constraints:
+  - 必须先确认最近订单中确实存在茶壶订单。
+  - 必须确认该订单仍处于可取消状态。
+  - 若取消会影响促销或退款到账节奏，应在最终说明里体现。
+  - 若安全路径存在，应真正完成取消，而不是只解释规则。
+suggested_plan:
+  - 查询最近茶壶订单状态。
+  - 核对是否仍可取消以及退款影响。
+  - 在安全可行时执行取消。
+sample_result:
+  tool_trace:
+    - step: 1
+      tool: device:commerce.list_recent_orders
+      arguments:
+        placed_within_days: 1
+        keyword: Tea Kettle
+      expected_observation: >
+        近期订单里能定位到 `ord_731` 的茶壶订单，避免与其它商品混淆。
+    - step: 2
+      tool: device:commerce.get_recent_order_status
+      arguments:
+        keyword: Tea Kettle
+      expected_observation: >
+        订单仍为 `payment_authorized`，`processing_started=false`，`cancelable=true`，
+        退款走原支付渠道且约 6 小时到账，`promo_credit_reversal=false`。
+    - step: 3
+      tool: device:commerce.get_order_policy
+      arguments:
+        order_id: ord_731
+      expected_observation: >
+        政策确认截止前仍可免费取消，退款路径与到账时效与状态查询一致，无额外捆绑回退。
+    - step: 4
+      tool: device:commerce.cancel_order
+      arguments:
+        order_id: ord_731
+        confirmed: true
+      expected_observation: >
+        返回 `cancelled=true`，订单状态变为 `cancelled`。
+  final_answer: >
+    我已先列出并核对最近订单，确认茶壶订单 `ord_731` 仍在可取消窗口且未开始处理。
+    现已完成取消，退款将原路退回，预计约 6 小时到账，不会影响促销积分回退。
+max_steps: 5
+allowed_tools:
+  - device:commerce.get_recent_order_status
+  - device:commerce.cancel_order
+  - device:commerce.list_recent_orders
+  - device:commerce.get_order_policy
+  - device:profile.get_user_labels
+  - device:schedule.get_next_event
+  - device:schedule.list_free_slots
+  - device:reminder.create
+  - device:timer.create
+  - device:note.search
+  - device:notifications.set_delivery_policy
+  - device:alarm.create
+  - device:note.open
+world:
+  context:
+    date: "2026-04-21"
+    local_time: "10:12"
+    city: Seattle
+    scenario_source: query_top100_batch4
+    source_query_id: seed_dataset_turn_e_part5.jsonl#73
+  state:
+    orders:
+      current:
+        order_id: ord_731
+        status: payment_authorized
+        cancelable: true
+    tool_responses:
+      commerce.list_recent_orders:
+        orders:
+          - order_id: ord_731
+            item_name: Tea Kettle
+            placed_at: "2026-04-21 09:41"
+            status: payment_authorized
+      commerce.get_order_policy:
+        policy:
+          order_id: ord_731
+          cancellation_deadline: "2026-04-21 18:00"
+          refund_type: original_payment_method
+          refund_delay_hours: 6
+          promo_credit_reversal: false
+      commerce.get_recent_order_status:
+        order:
+          order_id: ord_731
+          item_name: Tea Kettle
+          placed_at: "2026-04-21 09:41"
+          status: payment_authorized
+          processing_started: false
+          cancelable: true
+          refund_type: original_payment_method
+          refund_delay_hours: 6
+          promo_credit_reversal: false
+      commerce.cancel_order:
+        cancelled: true
+        order_id: ord_731
+    tool_state_updates:
+      commerce.cancel_order:
+        orders:
+          current:
+            order_id: ord_731
+            status: cancelled
+            cancelable: false
+execution_rules:
+  - 必须先定位茶壶订单并检查状态与取消规则，再执行取消。
+  - 只有在订单仍可取消时，才可执行取消。
+  - 最终状态应体现订单已取消，并在结果中说明退款影响。
+evaluation_rubric: []

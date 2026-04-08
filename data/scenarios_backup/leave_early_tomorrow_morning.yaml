@@ -1,0 +1,135 @@
+id: leave_early_tomorrow_morning
+category: implicit_reasoning
+user_prompt: 帮我判断我明天早上是否需要比平时更早出门，并帮我调整闹钟。
+original_question: 我明天早上需要提前出门吗？
+tool_category: schedule_travel
+implicit_reason: 用户真正关心的是明早首个行程是否会因天气或路况导致出发时间前移。系统需要读取明天第一个日程，结合天气、路况与通勤时长估算额外缓冲，再决定是否需要提前，并同步修改闹钟或提醒。
+hidden_constraints:
+- 只需要关注明早第一个关键日程。
+- 需要结合天气与交通异常，而不是只看固定通勤时间。
+- 结论应体现在新的起床时间或出门时间上。
+- 若无需提前，也应明确说明原因。
+suggested_plan:
+- 读取明天早上的首个日程及地点。
+- 查询对应时段的天气与路线耗时。
+- 计算所需缓冲并调整闹钟。
+sample_result:
+  tool_trace:
+    - step: 1
+      tool: device:schedule.get_next_event
+      arguments:
+        scope: tomorrow_morning
+      expected_observation: >
+        明早首个关键日程为市区办公室团队站会 09:00，需要预留到岗缓冲。
+    - step: 2
+      tool: device:weather.get_forecast
+      arguments:
+        city: Seattle
+        date: "2026-03-20"
+        time_range: "07:00-09:00"
+      expected_observation: >
+        通勤时段有大雨与能见度下降，系统给出额外路途延误估计，早高峰风险高于平常。
+    - step: 3
+      tool: device:travel.get_trip_brief
+      arguments:
+        destination: Downtown Office
+        date: "2026-03-20"
+      expected_observation: >
+        基线通勤约 22 分钟，在明日天气与路况修正后整体可执行时长明显拉长，需要更早出门。
+    - step: 4
+      tool: device:alarm.modify
+      arguments:
+        alarm_id: weekday_wake
+        new_time: "2026-03-20 06:45"
+      expected_observation: >
+        起床闹钟自原 07:15 前移至 06:45，以覆盖额外路途与缓冲。
+  final_answer: >
+    明天早上你需要比平时更早出门。明早 09:00 在市区办公室有站会，而明早通勤时段有大雨与额外延误风险，
+    在基线通勤之上需要显著缓冲。我已把工作日起床闹钟从 07:15 调到 06:45，请按新时间准备出门。
+max_steps: 6
+allowed_tools:
+- device:schedule.get_next_event
+- device:schedule.list_free_slots
+- device:events.get_venue_details
+- device:weather.get_forecast
+- device:weather.check_weather
+- device:alarm.create
+- device:alarm.modify
+- device:alarm.check
+- device:reminder.create
+- device:reminder.check
+- device:travel.get_trip_brief
+- device:booking.list_upcoming_bookings
+- device:booking.get_booking_status
+- device:booking.cancel_booking
+- device:reservations.get_details
+- device:reservations.cancel
+- device:profile.get_user_labels
+- device:note.search
+- device:timer.create
+world:
+  context:
+    date: '2026-03-19'
+    local_time: '18:10'
+    city: Seattle
+    destination_hint: Downtown Office
+    scenario_source: mobile_implicit_cases_zh
+  state:
+    calendar:
+      next_event:
+        title: 团队站会
+        start_time: '2026-03-20 09:00'
+        location: Downtown Office
+        boarding_buffer_minutes: 15
+    maps:
+      routes_by_destination:
+        Downtown Office:
+        - route_id: route_fast
+          label: Fast route
+          distance_km: 18
+          eta_minutes: 22
+          traffic_level: moderate
+          tolls: false
+        - route_id: route_safe
+          label: Safer route
+          distance_km: 21
+          eta_minutes: 28
+          traffic_level: light
+          tolls: true
+    navigation:
+      active_destination: null
+      active_route_id: null
+      guidance_started: false
+      expected_arrival_time: null
+      selected_route_summary: null
+    tool_responses:
+      schedule.get_next_event:
+        event:
+          title: 团队站会
+          start_time: "2026-03-20 09:00"
+          location: Downtown Office
+          boarding_buffer_minutes: 15
+      weather.get_forecast:
+        forecast:
+          city: Seattle
+          date: "2026-03-20"
+          time_range: "07:00-09:00"
+          condition: heavy_rain
+          visibility: reduced
+          expected_commute_delay_minutes: 15
+      travel.get_trip_brief:
+        trip:
+          destination: Downtown Office
+          date: "2026-03-20"
+          baseline_eta_minutes: 22
+          weather_adjusted_eta_minutes: 37
+      alarm.modify:
+        alarm_id: weekday_wake
+        previous_time: "2026-03-20 07:15"
+        new_time: "2026-03-20 06:45"
+        success: true
+execution_rules:
+- 必须以「明天上午第一个关键日程」为锚点，而不是被当天下午或晚间日程带偏。
+- 判断是否提前出门时，必须同时参考通勤 ETA 与明日对应时段天气/路况带来的额外延误，不能只用晴天基线。
+- 若结论是需要更早出发，应通过修改闹钟或等价提醒把新起床/出门时间写死；若不需要提前，也应说明天气与日程为何不构成挤压。
+evaluation_rubric: []

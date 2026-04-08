@@ -1,0 +1,130 @@
+id: apply_saved_prompt_for_user_stories
+category: implicit_reasoning
+user_prompt: 帮我从已存的“产品经理需求分析”提示词中，选最适配当前需求文档的那一个，直接拆解成用户故事，但先确认登录和提示词可用性。
+original_question: 我最近写了几个关于“产品经理需求分析”的提示词，想找到它们中最适合当前编写用户故事的那个，然后立即用它来帮我将一个复杂的需求文档拆解成用户故事。但是我需要先登录我的AI咖账户，找到相关的提示词，然后使用最合适的那个来处理我现在手头的文档。
+tool_category: prompt_library_workflow
+implicit_reason: 用户不是单纯找提示词，而是要把当前需求文档可靠地拆成用户故事。系统需要先确认账号会话可用，再读取已存提示词和当前文档，选出最匹配的一条后执行应用，避免在未登录或选错提示词的情况下直接处理文档。
+hidden_constraints:
+  - 必须先确认登录状态和权限。
+  - 提示词选择必须与当前文档主题和输出目标匹配。
+  - 最终目标是生成用户故事，而不是只返回提示词列表。
+  - 在提示词不可用或会话失效时，不能直接执行应用。
+suggested_plan:
+  - 检查账号登录状态。
+  - 读取已存提示词和当前文档概览。
+  - 选择最匹配的提示词并执行应用。
+sample_result:
+  tool_trace:
+    - step: 1
+      tool: device:account.get_login_status
+      arguments: {}
+      expected_observation: >
+        返回 AI咖 账号已登录、session 仍然有效且具备写权限，
+        说明后续可以安全读取并应用已存提示词。
+    - step: 2
+      tool: device:prompts.list_saved
+      arguments: {}
+      expected_observation: >
+        看到多条“产品经理需求分析”相关提示词，其中 `p_2`
+        明确适用于“将复杂需求文档拆解为用户故事”。
+    - step: 3
+      tool: device:documents.get_active_document
+      arguments: {}
+      expected_observation: >
+        当前活动文档 `doc_882` 的主题是“会员体系改版”，目标输出正是“用户故事”，
+        与 `p_2` 的用途高度匹配。
+    - step: 4
+      tool: device:prompts.apply_saved
+      arguments:
+        prompt_id: p_2
+        document_id: doc_882
+      expected_observation: >
+        应生成 `latest_user_stories`，状态为 `generated`，
+        表明系统确实完成了用户故事拆解而不只是选出提示词。
+  final_answer: >
+    已确认 AI咖 账号可用，并选中了最匹配当前需求文档的“产品经理需求分析-用户故事版”提示词。
+    该提示词已经应用到文档 `doc_882`，用户故事结果已生成，可继续查看或导出。
+max_steps: 6
+allowed_tools:
+  - device:account.get_login_status
+  - device:prompts.list_saved
+  - device:prompts.apply_saved
+  - device:documents.get_active_document
+  - device:documents.parse_pdf
+  - device:note.search
+  - device:note.open
+  - device:messaging.open_contact_thread
+  - device:profile.get_user_labels
+  - device:schedule.get_next_event
+  - device:schedule.list_free_slots
+  - device:reminder.create
+  - device:timer.create
+  - device:alarm.create
+world:
+  context:
+    date: "2026-04-18"
+    local_time: "14:10"
+    city: Shanghai
+    scenario_source: query_top100_batch1
+    source_query_id: seed_dataset_turn_e_part1.jsonl#65
+  state:
+    documents:
+      outputs: {}
+    tool_responses:
+      account.get_login_status:
+        account:
+          logged_in: true
+          provider: AI咖
+          session_valid: true
+          writable: true
+      prompts.list_saved:
+        prompts:
+          - prompt_id: p_1
+            title: 产品经理需求分析-泛化版
+            tags: ["需求分析", "问题澄清"]
+            best_for: "需求梳理，不直接输出用户故事"
+          - prompt_id: p_2
+            title: 产品经理需求分析-用户故事版
+            tags: ["需求分析", "用户故事", "拆解"]
+            best_for: "将复杂需求文档拆解为用户故事"
+          - prompt_id: p_3
+            title: PRD 风险清单
+            tags: ["PRD", "风险"]
+            best_for: "风险排查"
+      documents.get_active_document:
+        document:
+          document_id: doc_882
+          title: 会员增长需求文档
+          topic: 会员体系改版
+          target_output: 用户故事
+      prompts.apply_saved:
+        applied: true
+        output_id: us_501
+    tool_state_updates:
+      prompts.apply_saved:
+        documents:
+          outputs:
+            latest_user_stories:
+              output_id: us_501
+              status: generated
+              prompt_id: p_2
+execution_rules:
+  - 必须先确认登录状态，再进行提示词应用。
+  - 不能只列提示词列表而不处理当前文档。
+  - 选中的提示词必须与“用户故事拆解”目标匹配。
+  - 成功路径应在最终状态中产出已生成的用户故事结果。
+evaluation_rubric:
+  - criterion: The agent checked account login status.
+    check:
+      type: action_called
+      tool: device:account.get_login_status
+  - criterion: The agent listed prompts before applying one.
+    check:
+      type: action_before
+      first: device:prompts.list_saved
+      second: device:prompts.apply_saved
+  - criterion: User stories were generated in final state.
+    check:
+      type: state_eq
+      path: documents.outputs.latest_user_stories.status
+      value: generated

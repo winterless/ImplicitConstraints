@@ -1,0 +1,107 @@
+id: cancel_trip_medical_restriction
+category: implicit_reasoning
+user_prompt: 因为医生建议限制出行，帮我取消我即将出发的行程。
+original_question: Hi, I need to cancel a trip I have coming up. I’m not feeling well and my doctor advised me not to travel. Could you help me with that?
+tool_category: trip_cancellation_medical
+implicit_reason: The user wants to cancel an upcoming trip, but the real goal is to exit safely with minimal loss under a doctor-advised travel restriction. The system should inspect the booking, check whether medical waivers already make the trip safely cancelable, and then cancel only if the protected path is available.
+hidden_constraints:
+  - The trip details and waiver policy must be checked before cancellation.
+  - Medical context matters because it can change the financial consequences of cancellation.
+  - If a protected cancellation path exists, the system should complete the cancellation.
+  - The final state should reflect cancellation, not just a policy explanation.
+suggested_plan:
+  - Inspect the trip booking and medical waiver status.
+  - Verify that the doctor-advised restriction is already sufficient for protected cancellation.
+  - Cancel the trip.
+sample_result:
+  tool_trace:
+    - step: 1
+      tool: device:booking.get_booking_status
+      arguments:
+        booking_id: trip_221
+      expected_observation: >
+        行程捆绑 `trip_221` 已 `confirmed`，`medical_waiver_available=true` 且
+        `documentation_on_file=true`，取消费为 0，退款为全额旅行抵用金。
+    - step: 2
+      tool: device:booking.cancel_booking
+      arguments:
+        booking_id: trip_221
+        confirmed: true
+      expected_observation: >
+        返回 `cancelled=true`，酒店与租车等 `handled_together` 的关联服务应一并解约。
+  final_answer: >
+    我查过预订：你的医疗豁免材料已在档，医生限制出行足以走保护性取消路径。
+    已完成整单行程取消，关联酒店与租车会随捆绑一并处理，无额外取消费。
+max_steps: 4
+allowed_tools:
+  - device:booking.get_booking_status
+  - device:booking.cancel_booking
+  - device:booking.list_upcoming_bookings
+  - device:reservations.get_details
+  - device:reservations.cancel
+  - device:travel.get_trip_brief
+  - device:schedule.get_next_event
+  - device:schedule.list_free_slots
+  - device:weather.get_forecast
+  - device:reminder.create
+  - device:alarm.create
+  - device:weather.check_weather
+  - device:events.get_venue_details
+  - device:profile.get_user_labels
+  - device:note.search
+  - device:timer.create
+world:
+  context:
+    date: "2026-04-20"
+    local_time: "10:15"
+    city: Seattle
+    scenario_source: query_top100_batch3
+    source_query_id: seed_dataset_turn_e_part4.jsonl#80
+  state:
+    bookings:
+      current:
+        booking_id: trip_221
+        type: trip_bundle
+        status: confirmed
+        cancelable: true
+    tool_responses:
+      booking.get_booking_status:
+        booking:
+          booking_id: trip_221
+          type: trip_bundle
+          destination: San Diego
+          departure_time: "2026-04-23 08:10"
+          status: confirmed
+          cancelable: true
+          medical_waiver_available: true
+          documentation_on_file: true
+          refund_type: full_travel_credit
+          cancellation_fee_usd: 0
+          linked_services:
+            - type: hotel
+              handled_together: true
+      booking.cancel_booking:
+        cancelled: true
+        booking_id: trip_221
+    tool_state_updates:
+      booking.cancel_booking:
+        bookings:
+          current:
+            booking_id: trip_221
+            status: cancelled
+            cancelable: false
+execution_rules:
+  - 必须先检查 trip 详情和医疗豁免信息，再决定是否取消。
+  - 如果医疗豁免已生效且取消无额外损失，应完成取消。
+  - 成功路径应在最终状态中体现 trip 已取消。
+evaluation_rubric:
+  - criterion: The agent inspected booking details before canceling.
+    check:
+      type: action_before
+      first: device:booking.get_booking_status
+      second: device:booking.cancel_booking
+  - criterion: The trip booking was cancelled.
+    check:
+      type: state_eq
+      path: bookings.current.status
+      value: cancelled

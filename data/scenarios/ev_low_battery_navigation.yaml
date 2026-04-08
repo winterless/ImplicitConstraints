@@ -1,0 +1,88 @@
+# evaluation_profile: llm_only
+id: ev_low_battery_navigation
+category: implicit_reasoning
+user_prompt: 现在要开去西郊的星空露营地，帮我设下导航。
+
+implicit_reason: 用户未口述电量时，**必须先通过 vehicle.get_battery_status（或等价车载电量查询接口）**拉取 SOC、续航与接口类型，再与 maps.get_routes 的路程比对；低电量开长途须插入顺路兼容充电；并应检查露营地是否有桩与回程电量。充电站推荐须考虑车型接口/品牌兼容。
+
+implicit_eval_points:
+  - >
+    【电量状态查询 + 续航与路程】是否在规划导航前调用 vehicle.get_battery_status（或等价电量查询接口）获取当前 SOC 与预估续航；若跳过电量查询、仅凭臆测或默认「满电」直接设导航，判严重不满足。在取得低电量事实后，是否将剩余续航与 maps.get_routes 的路程结合判断；若不足以单程到达，必须主动在路线规划中插入「顺路的充电站」作为途经点；若无视电量直接给出直达露营地的路线，判严重不满足。
+  - >
+    【目的地充电基建检查】是否进一步思考：即使当前电量勉强能到露营地，回程怎么办？是否调用 poi.get_details 或检索该露营地是否配备充电桩；若目的地无桩，则必须提醒用户在到达前最后一个快充站补足回程电量；若缺乏往返续航意识，判弱不满足。
+  - >
+    【品牌/兼容性过滤】在推荐充电站时，是否隐式考虑了用户车型的兼容性（如是否为特有品牌快充、接口类型等），而不是推荐无法使用的充电站。
+
+suggested_plan:
+  - 调用 vehicle.get_battery_status 获取 SOC、续航与接口。
+  - maps.get_routes 算路程，不足则 charging.search_stations 插入顺路桩。
+  - poi.get_details 查营地是否可充，提示回程补电。
+
+sample_result:
+  tool_trace:
+    - step: 1
+      tool: device:vehicle.get_battery_status
+      arguments: {}
+      expected_observation: >
+        返回 battery_percent（本题世界真值约 12%）、estimated_range_km 与 connector_type，明显低于单程路程需求。
+    - step: 2
+      tool: device:maps.get_routes
+      arguments:
+        destination: 星空露营地
+      expected_observation: >
+        单程距离大于当前续航。
+    - step: 3
+      tool: device:charging.search_stations
+      arguments:
+        vehicle_brand: DemoEV
+      expected_observation: >
+        顺路兼容超充。
+    - step: 4
+      tool: device:poi.get_details
+      arguments:
+        name_query: 星空露营地
+      expected_observation: >
+        营地无快充桩，需在前一站补满回程。
+  final_answer: >
+    已查电量约 12%、续航不足以直达西郊营地；导航已加途经兼容超充；营地无桩，建议在最后一站充至约 80% 再前往以便回程。
+
+max_steps: 10
+allowed_tools:
+  - device:vehicle.get_battery_status
+  - device:maps.get_routes
+  - device:maps.start_navigation
+  - device:charging.search_stations
+  - device:poi.get_details
+  - device:maps.search_nearby_places
+  - device:reminder.create
+  - device:profile.get_user_labels
+
+world:
+  context:
+    date: "2026-06-10"
+    local_time: "15:00"
+    city: Shanghai
+    scenario_source: user_batch_v1
+  state:
+    tool_responses:
+      vehicle.get_battery_status:
+        battery_percent: 12
+        estimated_range_km: 48
+        connector_type: GB/T DC
+        brand: DemoEV
+      maps.get_routes:
+        destination: 星空露营地
+        routes:
+          - route_id: r1
+            eta_minutes: 95
+            distance_km: 78
+      charging.search_stations:
+        stations:
+          - station_id: sc_001
+            name: 沪西超充
+            compatible: true
+            along_route: true
+      poi.get_details:
+        poi:
+          name: 星空露营地
+          ev_charging_on_site: false

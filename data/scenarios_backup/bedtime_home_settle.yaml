@@ -1,0 +1,135 @@
+id: bedtime_home_settle
+category: implicit_reasoning
+user_prompt: 我要睡了，帮我把家里切到睡眠前的安顿状态。
+original_question: 我准备睡了，家里安顿好。
+tool_category: smart_home
+implicit_reason: 用户表面是一句泛化指令，真实需求是多个家庭状态的联动收口。系统需要先切入睡眠模式，再检查门锁、窗户、灯光、安防和空调状态，最后按睡眠场景完成统一调整，避免只执行单个动作。
+hidden_constraints:
+- 应同时覆盖安全、照明和环境舒适度。
+- 需要先检查状态，再决定哪些动作需要执行。
+- 空调应进入适合睡眠的曲线或模式，而非简单开关。
+- 执行过程应尽量少打扰用户。
+suggested_plan:
+- 启动睡眠模式。
+- 检查锁、窗、灯、安防和空调状态。
+- 执行睡眠场景，把家里切到夜间稳定状态。
+sample_result:
+  tool_trace:
+  - step: 1
+    tool: device:sleep_mode.enable
+    arguments:
+      mode_name: bedtime
+    expected_observation: >
+      睡眠模式被开启，说明系统已经进入低打扰的夜间收口流程。
+  - step: 2
+    tool: device:home.get_safety_status
+    arguments: {}
+    expected_observation: >
+      读到家里仍有未锁门窗、部分灯光未关闭、安防未布防，
+      且空调还处在不适合睡眠的普通制冷模式。
+  - step: 3
+    tool: device:home.execute_scene
+    arguments:
+      scene_name: bedtime_settle
+      action: activate
+    expected_observation: >
+      睡眠场景执行成功后，应把门锁与窗户状态收口到安全状态，
+      关闭不必要灯光，布防安防，并将空调切到更适合睡眠的模式。
+  final_answer: >
+    已帮你把家里切到睡前安顿状态：睡眠模式已开启，门锁和窗户状态已收口，
+    不必要灯光会关闭，安防进入夜间布防，空调也切到更适合睡眠的模式。
+    整个过程会尽量低打扰，不需要你再逐个手动处理。
+max_steps: 6
+allowed_tools:
+- device:sleep_mode.enable
+- device:home.get_safety_status
+- device:home.execute_scene
+- device:timer.create
+- device:timer.check
+- device:reminder.create
+- device:reminder.check
+- device:power.get_battery_status
+- device:weather.get_forecast
+- device:schedule.get_next_event
+- device:alarm.create
+- device:alarm.check
+- device:profile.get_user_labels
+- device:note.search
+- device:weather.check_weather
+- device:schedule.list_free_slots
+- device:travel.get_trip_brief
+- device:note.open
+- device:power.freeze_background_apps
+- device:power.apply_saving_plan
+world:
+  context:
+    date: '2026-03-19'
+    local_time: '18:10'
+    city: Seattle
+    destination_hint: Home
+    scenario_source: mobile_implicit_cases_zh
+  state:
+    calendar:
+      next_event:
+        title: Upcoming task
+        start_time: '19:30'
+        location: Home
+        boarding_buffer_minutes: 30
+    maps:
+      routes_by_destination:
+        Home:
+        - route_id: route_fast
+          label: Fast route
+          distance_km: 18
+          eta_minutes: 22
+          traffic_level: moderate
+          tolls: false
+        - route_id: route_safe
+          label: Safer route
+          distance_km: 21
+          eta_minutes: 28
+          traffic_level: light
+          tolls: true
+    navigation:
+      active_destination: null
+      active_route_id: null
+      guidance_started: false
+      expected_arrival_time: null
+      selected_route_summary: null
+    home:
+      safety_status:
+        front_door_locked: false
+        bedroom_windows_closed: false
+        living_room_lights_on: true
+        security_armed: false
+        air_conditioner_mode: cool
+        air_conditioner_temperature_c: 20
+    tool_responses:
+      home.get_safety_status:
+        safety_status:
+          front_door_locked: false
+          bedroom_windows_closed: false
+          living_room_lights_on: true
+          security_armed: false
+          air_conditioner_mode: cool
+          air_conditioner_temperature_c: 20
+    tool_state_updates:
+      sleep_mode.enable:
+        sleep_mode:
+          enabled: true
+          mode_name: bedtime
+      home.execute_scene:
+        home:
+          safety_status:
+            front_door_locked: true
+            bedroom_windows_closed: true
+            living_room_lights_on: false
+            security_armed: true
+            air_conditioner_mode: sleep
+            air_conditioner_temperature_c: 24
+execution_rules:
+- 应同时覆盖安全、照明和环境舒适度。
+- 需要先检查状态，再决定哪些动作需要执行。
+- 空调应进入适合睡眠的曲线或模式，而非简单开关。
+- 执行过程应尽量少打扰用户。
+evaluation_rubric: []

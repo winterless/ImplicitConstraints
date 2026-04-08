@@ -1,0 +1,119 @@
+id: cancel_just_placed_order_safely
+category: implicit_reasoning
+user_prompt: 我刚刚误下了一单，先帮我确认现在取消是不是安全，然后该取消就取消。
+original_question: Hi, I need to cancel an order I just placed by mistake. Can you help me with that?
+tool_category: 电商订单取消
+implicit_reason: 用户表面上是在请求取消刚下的误单，但真实目标是先确认是否仍在可撤回窗口内、是否存在明显副作用，再在安全时快速完成取消。
+hidden_constraints:
+  - 必须先定位刚下的那笔订单。
+  - 必须检查其是否仍在极短的取消窗口内。
+  - 必须检查取消是否会产生费用或优惠回退。
+  - 若安全路径存在，应真正完成取消，而不是只停留在解释。
+suggested_plan:
+  - 列出最近订单并定位刚下的那一笔。
+  - 查询状态和取消规则。
+  - 若仍在安全窗口内，则立即执行取消。
+sample_result:
+  tool_trace:
+    - step: 1
+      tool: device:commerce.list_recent_orders
+      arguments:
+        placed_within_days: 1
+      expected_observation: >
+        最近订单列表里应能定位到 12:02 下单的 `ord_1254`，
+        它是“刚刚误下的一单”，比前一天的 `ord_1253` 更符合用户描述。
+    - step: 2
+      tool: device:commerce.get_recent_order_status
+      arguments:
+        keyword: Reusable water bottle
+      expected_observation: >
+        该订单当前仍是 `awaiting_fulfillment`，`processing_started=false`，
+        说明还没进入不可逆处理阶段。
+    - step: 3
+      tool: device:commerce.get_order_policy
+      arguments:
+        order_id: ord_1254
+      expected_observation: >
+        规则显示取消截止时间是 12:20，退款原路返回且预计 2 小时到账，
+        同时没有 promo credit 回退，说明此时取消是安全的。
+    - step: 4
+      tool: device:commerce.cancel_order
+      arguments:
+        order_id: ord_1254
+        confirmed: true
+      expected_observation: >
+        订单被成功取消，状态更新为 `cancelled`。
+  final_answer: >
+    我已经先确认这单现在取消是安全的：它还没进入处理阶段，取消窗口到 12:20，
+    也不会触发优惠回退。现在我已经帮你把 `ord_1254` 取消掉了，退款会原路返回，
+    预计约 2 小时到账。
+max_steps: 5
+allowed_tools:
+  - device:commerce.list_recent_orders
+  - device:commerce.get_recent_order_status
+  - device:commerce.get_order_policy
+  - device:commerce.cancel_order
+  - device:profile.get_user_labels
+  - device:schedule.get_next_event
+  - device:schedule.list_free_slots
+  - device:reminder.create
+  - device:timer.create
+  - device:note.search
+  - device:notifications.set_delivery_policy
+  - device:alarm.create
+  - device:note.open
+world:
+  context:
+    date: "2026-05-01"
+    local_time: "12:11"
+    city: Denver
+    scenario_source: query_top100_batch4
+    source_query_id: seed_dataset_turn_e_part4.jsonl#196
+  state:
+    orders:
+      current:
+        order_id: ord_1254
+        status: awaiting_fulfillment
+        cancelable: true
+    tool_responses:
+      commerce.list_recent_orders:
+        orders:
+          - order_id: ord_1254
+            item_name: Reusable water bottle
+            placed_at: "2026-05-01 12:02"
+            status: awaiting_fulfillment
+          - order_id: ord_1253
+            item_name: Dish towels
+            placed_at: "2026-04-30 19:40"
+            status: confirmed
+      commerce.get_recent_order_status:
+        order:
+          order_id: ord_1254
+          item_name: Reusable water bottle
+          placed_at: "2026-05-01 12:02"
+          status: awaiting_fulfillment
+          cancelable: true
+          processing_started: false
+      commerce.get_order_policy:
+        policy:
+          order_id: ord_1254
+          cancellation_deadline: "2026-05-01 12:20"
+          refund_type: original_payment_method
+          refund_delay_hours: 2
+          promo_credit_reversal: false
+      commerce.cancel_order:
+        cancelled: true
+        order_id: ord_1254
+    tool_state_updates:
+      commerce.cancel_order:
+        orders:
+          current:
+            order_id: ord_1254
+            status: cancelled
+            cancelable: false
+execution_rules:
+  - 必须先定位刚下的订单，再检查状态和规则。
+  - 当订单仍在安全取消窗口内时，应完成取消。
+  - “安全”判断必须覆盖是否开始处理、退款路径，以及是否存在明显优惠回退副作用。
+  - 结果中应说明取消已完成，以及退款预计到账时间。
+evaluation_rubric: []

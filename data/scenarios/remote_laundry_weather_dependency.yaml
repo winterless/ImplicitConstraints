@@ -1,0 +1,94 @@
+# evaluation_profile: llm_only
+id: remote_laundry_weather_dependency
+category: implicit_reasoning
+user_prompt: 我出门了，帮我把家里智能洗衣机开一下洗衣服，我想周末穿。
+
+implicit_reason: 远程洗衣须先查设备状态（门、筒内衣物）；应结合**日历确认今日星期几**，再对齐「周末穿」的时间含义；结合天气决定晾干 vs 洗烘。用户外出时通常**无法获知具体回家时刻**，不宜强依赖「回家前多久洗完」类预约；更应关注洗烘能力、阴雨与筒内久闷风险，并用提醒/洗烘程序等可执行手段降低湿衣久置。
+
+implicit_eval_points:
+  - >
+    【物理状态前置检查】在远程启动家电前，是否先通过 iot.get_device_status 检查洗衣机门是否关闭、里面是否有衣物。不能在空筒或门没关的情况下强行启动；若未检查前置状态直接调用启动，判不满足。
+  - >
+    【日历与「周末穿」对齐】是否通过 schedule.get_next_event、日历或等价接口结合 context 日期，确认**今天为周五**（或等价事实），从而正确理解「周末穿」多指**次日周六起**可穿等时间窗口，而非混淆星期。若完全不看日历/星期、凭感觉解释「周末」，判弱不满足。
+  - >
+    【天气与烘干依赖】用户诉求是「周末穿」。是否查询了**周五至周末**相关时段的天气（weather.get_forecast 或等价）。如果用户家中只有普通洗衣机（无烘干功能），且接下来几天是阴雨天气，模型需要提醒自然晾干可能来不及；若有洗烘一体机，则应主动建议开启「洗烘模式」而非单纯「洗涤模式」；若完全不看天气也不区分烘干条件，判弱不满足。
+  - >
+    【筒内久闷与远程场景·无回家时刻假设】是否意识到用户已出门，洗毕后湿衣若长时间留在筒内会闷臭、起皱。在**通常无法获知用户何时回家**的前提下，不应把「预约在回家前一小时洗完」等作为硬性要求；是否改为优先洗烘一体、洗完推送提醒、延迟启动或强调回家后尽快取出等**不依赖未知回家时刻**的方案；若机械地立刻单洗并假定用户很快回家取衣、无视久闷风险，判弱不满足。
+
+suggested_plan:
+  - 用日历/日程确认今日星期与「周末」所指。
+  - 查洗衣机门、筒内衣物与是否带烘干。
+  - 查至周末天气，决定洗烘 vs 晾干。
+  - 结合洗烘与提醒，避免依赖无法获知的回家时间。
+
+sample_result:
+  tool_trace:
+    - step: 1
+      tool: device:schedule.get_next_event
+      arguments: {}
+      expected_observation: >
+        返回中含今日日期与 weekday 为 Friday/周五，可与「周末穿」对齐。
+    - step: 2
+      tool: device:iot.get_device_status
+      arguments:
+        device_type: washer
+      expected_observation: >
+        门已关、有衣物、支持洗烘。
+    - step: 3
+      tool: device:weather.get_forecast
+      arguments:
+        location: 家
+        date: "2026-06-12"
+      expected_observation: >
+        覆盖周末阴雨，需烘干或提醒晾干风险。
+    - step: 4
+      tool: device:iot.start_washer_cycle
+      arguments:
+        mode: wash_dry
+      expected_observation: >
+        洗烘程序；可配合洗完手机提醒，而非绑定未知回家时刻的预约。
+  final_answer: >
+    今天周五，你想周末穿——周末多阴雨，已用洗烘程序；洗完会给你发提醒，回家后尽快取出以免闷在筒里。若只有洗涤无烘干，会另提示晾干风险。
+
+max_steps: 8
+allowed_tools:
+  - device:iot.get_device_status
+  - device:iot.start_washer_cycle
+  - device:weather.get_forecast
+  - device:weather.check_weather
+  - device:home.execute_scene
+  - device:reminder.create
+  - device:schedule.get_next_event
+  - device:schedule.list_free_slots
+  - device:profile.get_user_labels
+
+world:
+  context:
+    date: "2026-06-12"
+    local_time: "09:30"
+    weekday: Friday
+    city: Hangzhou
+    scenario_source: user_batch_v1
+  state:
+    tool_responses:
+      schedule.get_next_event:
+        today:
+          date: "2026-06-12"
+          weekday: Friday
+          weekday_zh: 周五
+        event:
+          title: 站会
+          start_time: "2026-06-12 10:00"
+          location: 线上
+      iot.get_device_status:
+        status:
+          device_type: washer
+          door_closed: true
+          load_present: true
+          has_dryer: true
+      weather.get_forecast:
+        forecast:
+          location: 家
+          date: "2026-06-13"
+          condition: rainy
+          rain_probability: 80

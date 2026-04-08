@@ -1,0 +1,107 @@
+id: cancel_upcoming_trip_safely
+category: implicit_reasoning
+user_prompt: 取消我即将出发的行程。
+original_question: Hi, I need to cancel an upcoming trip I have booked.
+tool_category: trip_cancellation_safety
+implicit_reason: The user asks for direct cancellation, but the real task is to unwind an upcoming trip safely. The system must inspect whether the trip contains linked components and whether cancellation can happen without unintentionally harming related bookings or losing avoidable value.
+hidden_constraints:
+  - Trip details must be checked before cancellation.
+  - Linked components such as hotel and car bookings may be affected by the cancellation choice.
+  - If the trip is safely cancellable, the system should complete the action.
+  - The final output should reflect the actual cancellation outcome, not just policy notes.
+suggested_plan:
+  - Inspect the upcoming trip booking and its linked components.
+  - Verify that cancellation is currently allowed.
+  - Cancel the trip if it is safe to do so.
+sample_result:
+  tool_trace:
+    - step: 1
+      tool: device:booking.get_booking_status
+      arguments:
+        booking_id: trip_508
+      expected_observation: >
+        Vancouver 行程捆绑 `trip_508` 可取消，取消费为 0，退款为全额信用额；
+        酒店与租车均为 `handled_together=true`，需整单解约。
+    - step: 2
+      tool: device:booking.cancel_booking
+      arguments:
+        booking_id: trip_508
+        confirmed: true
+      expected_observation: >
+        整单取消成功，状态变为 `cancelled`，关联服务应同步终止。
+  final_answer: >
+    我先核对了整个行程捆绑及关联酒店、租车，确认可以无罚金取消。
+    现已完成取消，你会获得全额旅行信用额用于后续预订。
+max_steps: 4
+allowed_tools:
+  - device:booking.get_booking_status
+  - device:booking.cancel_booking
+  - device:booking.list_upcoming_bookings
+  - device:reservations.get_details
+  - device:reservations.cancel
+  - device:travel.get_trip_brief
+  - device:schedule.get_next_event
+  - device:schedule.list_free_slots
+  - device:weather.get_forecast
+  - device:reminder.create
+  - device:alarm.create
+  - device:weather.check_weather
+  - device:events.get_venue_details
+  - device:profile.get_user_labels
+  - device:note.search
+  - device:timer.create
+world:
+  context:
+    date: "2026-04-20"
+    local_time: "15:05"
+    city: Seattle
+    scenario_source: query_top100_batch3
+    source_query_id: seed_dataset_turn_e_part5.jsonl#55
+  state:
+    bookings:
+      current:
+        booking_id: trip_508
+        type: trip_bundle
+        status: confirmed
+        cancelable: true
+    tool_responses:
+      booking.get_booking_status:
+        booking:
+          booking_id: trip_508
+          type: trip_bundle
+          destination: Vancouver
+          departure_time: "2026-04-24 07:20"
+          status: confirmed
+          cancelable: true
+          refund_type: full_credit
+          cancellation_fee_usd: 0
+          linked_services:
+            - type: hotel
+              handled_together: true
+            - type: rental_car
+              handled_together: true
+      booking.cancel_booking:
+        cancelled: true
+        booking_id: trip_508
+    tool_state_updates:
+      booking.cancel_booking:
+        bookings:
+          current:
+            booking_id: trip_508
+            status: cancelled
+            cancelable: false
+execution_rules:
+  - 必须先检查 trip booking 详情，再执行取消。
+  - 不能忽略 linked services 对取消结果的影响。
+  - 成功路径应在最终状态中体现 trip 已取消。
+evaluation_rubric:
+  - criterion: The agent inspected the trip booking before cancellation.
+    check:
+      type: action_before
+      first: device:booking.get_booking_status
+      second: device:booking.cancel_booking
+  - criterion: The trip booking was cancelled.
+    check:
+      type: state_eq
+      path: bookings.current.status
+      value: cancelled
