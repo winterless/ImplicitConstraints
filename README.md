@@ -1,201 +1,8 @@
 # Implicit Constraints Demo
 
-一个最小可运行的 `Agent-as-a-World` demo，实现了：
+这个仓库的目标很简单：把隐式约束 benchmark 的核心设计收敛成一套可运行、可复盘、可按规则维度统计的最小系统。
 
-- MCP 风格的 mock 工具接口
-- 单场景 YAML 加载
-- 可插拔 agent
-- 可分别配置的 `agent / world / evaluator` 三个角色
-- 可切换的 world model（deterministic mock / LLM world model）
-- evaluator 支持 deterministic checks 或 LLM judge
-- 一个 `route + time` 的完整 demo
-
-## Demo 内容
-
-当前内置场景：`airport_route_time`
-
-用户请求：
-
-`帮我设置导航，确保我能准时到机场。`
-
-正确 agent 需要：
-
-- 先查询日历里的下一个事件
-- 推断航班需要提前到达
-- 再查询路线
-- 选择真正能满足时间约束的路线
-
-## 安装
-
-```bash
-python -m pip install -e .
-```
-
-## 运行
-
-默认会读取根目录下的 `llm_config.yaml`。如果不额外传参数，`agent / world / evaluator` 三个角色都会按配置文件运行；仓库默认配置是三者都走 LLM。
-
-这个仓库使用的是 `src/` 布局，所以有两种运行方式：
-
-1. 先安装包，再直接运行：
-
-```bash
-python -m pip install -e .
-python -m implicit_constraints_demo.main --scenario data/scenarios/airport_route_time.yaml
-```
-
-2. 不安装包，直接从仓库根目录运行：
-
-```bash
-PYTHONPATH=src python -m implicit_constraints_demo.main \
-  --scenario data/scenarios/airport_route_time.yaml
-```
-
-如果你已经在配置文件里填好了可用的 LLM endpoint / API key，直接运行：
-
-```bash
-PYTHONPATH=src python -m implicit_constraints_demo.main \
-  --scenario data/scenarios/airport_route_time.yaml
-```
-
-如果你想强制使用本地 deterministic world：
-
-```bash
-PYTHONPATH=src python -m implicit_constraints_demo.main \
-  --scenario data/scenarios/airport_route_time.yaml \
-  --world-mode mock
-```
-
-如果已经配置了 API key，并希望更贴近论文里的 Agent-as-a-World 设计，可以让 world 也由单独的 LLM 来模拟：
-
-```bash
-PYTHONPATH=src python -m implicit_constraints_demo.main \
-  --scenario data/scenarios/airport_route_time.yaml \
-  --world-mode llm
-```
-
-默认会把完整运行结果保存到：
-
-```text
-runs/airport_route_time.json
-```
-
-如果想自定义输出目录：
-
-```bash
-PYTHONPATH=src python -m implicit_constraints_demo.main \
-  --scenario data/scenarios/airport_route_time.yaml \
-  --world-mode mock \
-  --output runs/custom
-```
-
-这会输出到：
-
-```text
-runs/custom/airport_route_time.json
-```
-
-如果不传 `--scenario`，会自动扫描 `data/scenarios/` 下所有可执行场景并批量运行，跳过像 catalog 这类不可执行 YAML：
-
-```bash
-PYTHONPATH=src python -m implicit_constraints_demo.main \
-  --world-mode mock
-```
-
-默认批量结果会输出到：
-
-```text
-runs/batch/
-```
-
-其中每个场景一个结果文件，另外还会生成：
-
-```text
-runs/batch/_summary.json
-```
-
-## 模型配置
-
-默认配置文件：`llm_config.yaml`
-
-```yaml
-agent:
-  mode: llm
-  provider: openai_compatible
-  base_url: https://dashscope.aliyuncs.com/compatible-mode/v1
-  model: qwen-plus
-  api_key_env: DASHSCOPE_API_KEY,ALIYUN_API_KEY
-  api_key_file: .secrets/alicloud_api_key.txt
-  require_api_key: true
-```
-
-三个角色都可以独立配置：
-
-- `agent`: 负责推理和选工具
-- `world`: 负责模拟 MCP / 工具返回值
-- `evaluator`: 负责给最终运行结果打分
-
-`mode` 支持：
-
-- `agent`: `llm | heuristic`
-- `world`: `llm | mock`
-- `evaluator`: `llm | deterministic`
-
-当前默认按 `DashScope` 兼容接口配置：
-
-- `base_url`: `https://dashscope.aliyuncs.com/compatible-mode/v1`
-- `model`: `qwen-plus`
-
-如果要切到本地 OpenAI-compatible 服务，可以直接改配置文件，例如：
-
-```yaml
-world:
-  mode: llm
-  provider: local_openai_compatible
-  base_url: http://127.0.0.1:8000/v1
-  model: qwen2.5-7b-instruct
-  api_key_env: ""
-  api_key_file: ""
-  require_api_key: false
-```
-
-API key 读取顺序：
-
-1. `--api-key`
-2. 该角色配置里的 `api_key_env`
-3. 该角色配置里的 `api_key_file`
-
-`.secrets/` 已加入 `.gitignore`，避免误提交密钥。
-
-按不同配置文件运行的常用命令：
-
-1. 使用默认配置 `llm_config.yaml`：
-
-```bash
-PYTHONPATH=src python -m implicit_constraints_demo.main \
-  --config llm_config.yaml \
-  --scenario data/scenarios/airport_route_time.yaml
-```
-
-2. 显式使用 `llm_config_qwen3.5plus.yaml`：
-
-```bash
-PYTHONPATH=src python -m implicit_constraints_demo.main \
-  --config llm_config_qwen3.5plus.yaml \
-  --scenario data/scenarios/airport_route_time.yaml
-```
-
-3. 使用 `llm_config_qwen3local.yaml`，让 `agent` 走本地 OpenAI-compatible 服务：
-
-```bash
-PYTHONPATH=src python -m implicit_constraints_demo.main \
-  --config llm_config_qwen3local.yaml \
-  --scenario data/scenarios/airport_route_time.yaml
-```
-
-其中 `llm_config_qwen3local.yaml` 里的 `agent.base_url` 指向 `http://127.0.0.1:8000/v1`，所以需要先启动本地兼容 OpenAI 的推理服务；同时该配置里的 `world` 和 `evaluator` 仍然使用 DashScope，因此对应 API key 也仍需可用。
-
-如果想批量跑 `data/scenarios/` 下的所有场景，也可以直接替换配置文件：
+## 最小运行命令
 
 ```bash
 PYTHONPATH=src python -m implicit_constraints_demo.main --config llm_config.yaml
@@ -203,42 +10,116 @@ PYTHONPATH=src python -m implicit_constraints_demo.main --config llm_config_qwen
 PYTHONPATH=src python -m implicit_constraints_demo.main --config llm_config_qwen3local.yaml
 ```
 
-常用覆盖参数：
+## 设计理念
 
-- `--config llm_config.yaml`
-- `--agent-mode heuristic`
-- `--world-mode mock`
-- `--evaluator-mode deterministic`
-- `--base-url ...`
-- `--model ...`
-- `--allow-missing-api-key`
+- 场景的核心不是“工具会不会用”，而是模型能否从自然语言里补出没被明说但决定正确性的约束。
+- 每条 `implicit_eval_points` 都必须挂到 7 个规则家族之一，避免 rubric 越写越散。
+- 批量结果只看 3 个口径：整题全对率、point 通过率、按规则家族拆分的 point 通过率。
 
-## 目录结构
+## 七个规则家族
 
-```text
-data/
-  scenarios/
-  tool_schemas/
-src/implicit_constraints_demo/
-  agent.py
-  evaluator.py
-  main.py
-  orchestrator.py
-  schemas.py
-  tool_registry.py
-  world.py
-```
+### 1. `时间/截止/缓冲/时区/ETA`
 
-## 设计原则
+关注点：用户说的是目标时刻，但真正要判断的往往是提前量、缓冲、到达截止、时区换算或 ETA。
 
-- 先做少量高质量 demo，不追求大而全
-- 工具接口优先做成 MCP 风格，方便后续替换成真实 server
-- evaluator 同时支持 deterministic checks 和 LLM judge，前者更稳，后者更适合 rubric 尚未补全的场景
-- agent 保持可插拔，目前内置一个基于 Qwen API 的 planning agent
+实际 case：
+- `airport_route_time` 不是简单回答“18:00 的航班几点走”，而是要先补出机场提前到达缓冲，再结合路线 ETA 反推最晚出发时刻。
+- `can_i_make_the_concert` 也不是只看演唱会 `19:00` 开场，而是要补出入场和找座的提前量，再判断“现在还赶不赶得上”。
 
-## 下一步可扩展方向
+设计要点：
+- point 文案要把“显式时间”和“真实截止”区分开。
+- 允许合理估计，但不允许完全忽略缓冲。
 
-- 增加 `alarm`、`calendar CRUD`、`weather`、`maps` 的更多 mock 工具
-- 增加第二个 agent 实现，例如本地模型或其他 provider adapter
-- 增加更多 scenario
-- 把本地 mock registry 升级成真正的 MCP server
+### 2. `先查真实状态再行动`
+
+关注点：很多题不是不能做，而是必须先核对世界状态，不能直接按用户一句话开干。
+
+实际 case：
+- `fridge_recipe_and_clear_expired` 要先读冰箱库存，再区分 `expired` 和 `expiring_soon`，不能为了“不浪费”把过期牛奶也塞进晚餐方案。
+- `dangerous_delete_draft_notes` 也要先 `note.search` 看看到底会删到哪些“草稿”，否则用户根本不知道影响面。
+
+设计要点：
+- 先查状态是硬前置，不是可选加分项。
+- 场景 world 里要给出足够明确的真值字段，让“查了”和“没查”能区分开。
+
+### 3. `风险防呆/确认后执行`
+
+关注点：当操作不可逆、代价高、信息不完整或误删误改风险大时，正确行为往往是先解释风险、再确认，而不是直接执行。
+
+实际 case：
+- `dangerous_delete_draft_notes` 要先说明命中列表、回收站和备份恢复路径，再等用户明确确认，不能直接批量删。
+- `cancel_upcoming_flight_dependency_check` 要把航班、酒店、门票的整体损失讲清楚；如果总代价高，不能一句带过就替用户取消。
+
+设计要点：
+- “要确认”必须和“为什么要确认”连在一起。
+- 不能把高风险动作包装成默认帮用户做好了。
+
+### 4. `排序/筛选/最优选择`
+
+关注点：模型不能只把候选项列出来，而要在真实可行集合里筛到正确答案。
+
+实际 case：
+- `chengdu_guiyang_latest_business_seat` 的关键不是“查到几趟车”，而是要在“商务座还有余票”的子集中选出最晚那一趟。
+- `comedy_movie_night_options` 也不是简单报热映榜，而是要结合“1 小时内只有一家影院可达”以及“榜首影片近店没排片”，给出真正可执行的推荐。
+
+设计要点：
+- 先定义可行集合，再谈排序。
+- 常见错误是把“全局最优”误当成“可执行最优”。
+
+### 5. `跨对象依赖/整体损失或整体可行性`
+
+关注点：用户口头上提到的是一个对象，但真正约束往往分散在多个对象、多个工具返回或多个子预订上。
+
+实际 case：
+- `cancel_upcoming_flight_dependency_check` 不能只看机票取消费，还要沿着同一趟旅行把酒店和活动票的损失一起算进去。
+- `can_i_make_the_concert` 也不是只查路线，而是要同时把日程空闲窗口、演出时间和 ETA 组合起来判断整体是否可行。
+
+设计要点：
+- 这类题的核心是“整体图景”，不是单字段命中。
+- point 应该约束模型把分散证据汇起来，而不是停留在单工具回答。
+
+### 6. `个性化/关系/偏好识别`
+
+关注点：有些隐式约束来自人与人的关系、用户长期偏好或身份标签，而不是来自任务字面。
+
+实际 case：
+- `focus_two_hours_family_boss_whitelist` 里，用户说“不要让别人打扰我”，真正要识别的是“老板必须能打进来”，而这通常要从 `profile.get_user_labels` 这类关系标签里恢复出来。
+
+设计要点：
+- 不能凭空编联系人或偏好。
+- 要让 world 中的标签、分组或历史行为能成为可验证证据。
+
+### 7. `自动化/提醒/真正落地执行`
+
+关注点：很多回答不是“说对了”就够，而是要把动作真正落到提醒、自动化、通知策略或设备状态上。
+
+实际 case：
+- `airport_route_time` 最合理的完成态不是只说“你 15:56 前走”，而是顺手创建一个接近出发时刻的提醒。
+- `arrive_home_turn_on_devices` 也不是现在立刻开空调和热水器，而是创建“接近到家时自动开启”的 arrival automation。
+- `focus_two_hours_family_boss_whitelist` 进一步要求把“仅老板可打扰，其他人抑制”落实到通知策略里，而不是只停留在口头承诺。
+
+设计要点：
+- point 要看最终是否真正改变了世界状态，或至少给出了明确可执行的落地动作。
+- 不能把“建议一下”当成完成执行。
+
+## 打分约束
+
+- 每条 `implicit_eval_points` 必须以 7 个规则家族标签之一开头。
+- 每个 point 只能归到 1 个家族。
+- 同一场景可以有多个 point 落在同一规则家族。
+- 批量汇总只保留：
+  - 整题全对率
+  - point 总通过率
+  - 按规则家族拆分的 point 通过率
+
+## TODO
+
+下面这些方向先保留为后续扩展清单，暂不并入当前 7 个主规则家族：
+
+- [ ] 该问清还是该直接做
+- [ ] 隐私/权限/最小暴露
+- [ ] 工具结果冲突/信息源冲突
+- [ ] 失败/空结果/降级策略
+- [ ] 预算/价格/风险偏好
+- [ ] 长期条件监控/后续回滚
+- [ ] 社交语境/沟通语气
