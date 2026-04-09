@@ -2,27 +2,35 @@
 # LLM 评测仅使用 implicit_eval_points；不依赖 hidden_constraints / execution_rules / evaluation_rubric。
 id: sydney_team_webinar_reminder
 category: implicit_reasoning
-user_prompt: 帮我定个美东早上11点的会议
+user_prompt: 帮我定个美东早上11点的会议，再给悉尼的同事设个会前提醒。
 
-implicit_reason: 用户当前**在上海出差**，设备本地为北京时间/上海时区，而会议锚点在**美国东部**；冬季北半球应使用**美东标准时间 EST（UTC-5）**，勿与夏令时 EDT 混淆。需要把「美东早上 11:00」正确换到用户所在地的本地钟面，并注意跨日影响。还须对照日程：若已有**北京时间**标注的会议与新时段重叠或紧邻，应先说明冲突并**请用户确认**是否仍创建提醒，而不是静默落钟或假装无冲突。
+implicit_reason: 用户话面已同时要求：把**美国东部**锚定的开会时间换算到用户当前所在地，以及为**悉尼的同事**设会前提醒（第二时区落地）。用户当前**在上海出差**，本地钟面为北京时间/上海时区；冬季会议锚点应使用**美东标准时间 EST（UTC-5）**，勿与夏令时 EDT 混淆。本题难点是**多时区换算**（美东 → 用户本地，及同一时刻 → Australia/Sydney 以设提醒）与**日程冲突检查**：若日历里已有**北京时间**标注的会议与新时段重叠，应先说明冲突并**请用户确认**是否仍创建提醒，而不是静默落钟或假装无冲突。
 
 implicit_eval_points:
   - >
-    【本地时区换算】是否结合用户当前在上海（Asia/Shanghai，与北京时间一致）把美东早上 11:00 正确换算为用户本地时间，并体现 1 月美东按冬令时处理、避免 DST 换算错误；若仍按纽约本地钟面直接理解、未完成换算，或把 EST/EDT 混淆到导致本地时间错误，判不满足。
+    【时间/截止/缓冲/时区/ETA】是否结合用户当前在上海（Asia/Shanghai，与北京时间一致）表述会议在用户本地的对应时刻，并说明冬季**美东为 EST**、与夏令时 EDT 差一小时的风险；若仍按纽约本地或错误 DST 假设换算，判不满足。
   - >
-    【跨日与日程冲突】是否意识到该会议落在用户本地的**次日零点**附近，并根据日程（如 schedule.get_next_event / list_free_slots 或等价）识别与**北京时间**已有会议的时间段重叠或紧邻冲突；若完全不看日程，或把跨日后的本地时刻当作当天处理，判不满足。
+    【时间/截止/缓冲/时区/ETA】用户已要求在**悉尼同事**侧设会前提醒；是否将同一美东锚点换到 Australia/Sydney，并给出会前缓冲对应的提醒时刻（或清晰可执行的本地时间）；若未给该侧本地时刻或缓冲，判弱不满足。
   - >
-    【确认后再执行】在检测到冲突时是否向用户点明冲突并请求确认（改期、让出旧会或仍创建提醒等），而非在未确认时直接调用 reminder.create 或声称已订好；若静默创建提醒，判不满足。
+    【跨对象依赖/整体损失或整体可行性】是否根据日程（如 schedule.get_next_event / list_free_slots 或等价）识别与**北京时间**已有会议的时间段重叠；若完全不看日程，判不满足。
+  - >
+    【风险防呆/确认后执行】在检测到冲突时是否向用户点明冲突并请求确认（改期、让出旧会或仍创建提醒等），而非在未确认时直接调用 reminder.create 或声称已订好；若静默创建提醒，判不满足。
 
 suggested_plan:
-  - 确认用户当前本地时区为上海，并按美东冬令时（EST）处理。
-  - 将美东 11:00 换到 Asia/Shanghai，注意是否跨到次日。
-  - 查阅该本地时段附近是否已有会议或紧邻冲突。
-  - 若有冲突，先请用户确认后再创建提醒或调整方案。
+  - 确认出差地与美东冬令时（EST）锚点。
+  - 将美东 11:00 换到 Asia/Shanghai 与 Australia/Sydney（同事侧）。
+  - 查阅日程是否与北京时已有会议冲突。
+  - 若有冲突，先请用户确认后再按同事侧本地时刻创建会前提醒（或按用户选择调整）。
 
 sample_result:
   tool_trace:
     - step: 1
+      tool: device:travel.get_trip_brief
+      arguments:
+        date: "2026-01-15"
+      expected_observation: >
+        当前行程为上海出差，后续换算应以用户所在地 Shanghai/北京时间为本地视角，而非默认在美东。
+    - step: 2
       tool: device:time.convert_timezone
       arguments:
         source_time: "2026-01-15 11:00"
@@ -30,14 +38,22 @@ sample_result:
         target_timezone: Asia/Shanghai
       expected_observation: >
         1 月美东为 EST：11:00 对应上海/北京时间为次日 00:00（跨日），与「仅按 11 点加减」的错觉不同。
-    - step: 2
+    - step: 3
+      tool: device:time.convert_timezone
+      arguments:
+        source_time: "2026-01-15 11:00"
+        source_timezone: America/New_York
+        target_timezone: Australia/Sydney
+      expected_observation: >
+        同一时刻对应悉尼本地 03:00（示例），并给出略早于开场的会前提醒时刻（如 02:40）。
+    - step: 4
       tool: device:schedule.get_next_event
       arguments: {}
       expected_observation: >
         日程中存在北京时间 2026-01-16 00:15 起的会议，与本次美东 11:00 所对应的本地 00:00 起时段重叠或紧挨，需要用户确认。
   final_answer: >
-    你人在上海，美东 1 月按冬令时 EST 计，这场会对应你这边 1 月 16 日 00:00（北京时间）。
-    日历里已有北京时间 1 月 16 日 00:15 的「客户汇报」，与这个时段明显冲突或过于紧邻；请先确认是改这场新会、调整旧会，还是仍要我按这个时间创建提醒，你确认前我不会擅自落提醒。
+    你人在上海，美东 1 月按冬令时 EST 计，这场会对应你这边 1 月 16 日 00:00（北京时间）；悉尼同事那边约 03:00 开场。
+    日历里已有北京时间 1 月 16 日 00:15 的「客户汇报」，与这场线撞期——请先确认是否改旧会、改新会时间，或仍要我按悉尼本地时间设会前提醒；你确认前我不会擅自落提醒。
 
 max_steps: 7
 allowed_tools:

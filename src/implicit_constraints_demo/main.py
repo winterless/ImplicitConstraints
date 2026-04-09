@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import argparse
-from collections import defaultdict
 import json
 from pathlib import Path
+import re
 import sys
 from typing import Any
 
@@ -23,6 +23,16 @@ from .tool_registry import ToolRegistry
 from .world import build_world
 
 DEFAULT_SCENARIO_MANIFEST = "scenario_manifest.yaml"
+RULE_FAMILY_LABELS = [
+    "时间/截止/缓冲/时区/ETA",
+    "先查真实状态再行动",
+    "风险防呆/确认后执行",
+    "排序/筛选/最优选择",
+    "跨对象依赖/整体损失或整体可行性",
+    "个性化/关系/偏好识别",
+    "自动化/提醒/真正落地执行",
+]
+OTHER_RULE_FAMILY_LABEL = "others"
 
 
 def _binary_scenario_score(passed_count: int, total_count: int) -> float:
@@ -32,143 +42,52 @@ def _binary_scenario_score(passed_count: int, total_count: int) -> float:
     return 1.0 if passed_count == total_count else 0.0
 
 
-def _load_rule_family_metadata(
-    scenario_dir: Path,
-) -> tuple[list[str], dict[str, list[str]], dict[str, list[str]]]:
-    rule_set_path = scenario_dir.parent / "rule_sets" / "implicit_rules_zh.yaml"
-    if not rule_set_path.exists():
-        return ["others"], {}, {}
-
-    point_rule_path = scenario_dir.parent / "rule_sets" / "point_rule_ids_zh.yaml"
-    explicit_point_rule_map: dict[str, list[str]] = {}
-    if point_rule_path.exists():
-        raw_point_map = load_yaml(point_rule_path)
-        scenario_point_rule_ids = raw_point_map.get("scenario_point_rule_ids", {})
-        if isinstance(scenario_point_rule_ids, dict):
-            for scenario_id, rule_ids in scenario_point_rule_ids.items():
-                if isinstance(rule_ids, list):
-                    explicit_point_rule_map[str(scenario_id).strip()] = [
-                        str(rule_id).strip() for rule_id in rule_ids if str(rule_id).strip()
-                    ]
-
-    raw = load_yaml(rule_set_path)
-    families = raw.get("rule_families", [])
-    if not isinstance(families, list):
-        return ["others"], {}, explicit_point_rule_map
-
-    rule_order: list[str] = []
-    scenario_rule_map: dict[str, list[str]] = defaultdict(list)
-    for item in families:
-        if not isinstance(item, dict):
-            continue
-        rule_id = str(item.get("rule_id", "")).strip()
-        if not rule_id:
-            continue
-        rule_order.append(rule_id)
-        existing_scenarios = item.get("existing_scenarios", [])
-        if not isinstance(existing_scenarios, list):
-            continue
-        for scenario_id in existing_scenarios:
-            scenario_key = str(scenario_id).strip()
-            if scenario_key and rule_id not in scenario_rule_map[scenario_key]:
-                scenario_rule_map[scenario_key].append(rule_id)
-
-    if "others" not in rule_order:
-        rule_order.append("others")
-
-    return rule_order, dict(scenario_rule_map), explicit_point_rule_map
-
-
-def _resolve_point_rule_ids(
-    *,
-    scenario_id: str,
-    total_points: int,
-    scenario_rule_map: dict[str, list[str]],
-    explicit_point_rule_map: dict[str, list[str]],
-) -> list[str]:
-    explicit = explicit_point_rule_map.get(scenario_id)
-    if explicit is not None:
-        if len(explicit) != total_points:
-            raise SystemExit(
-                f"Point-rule assignment length mismatch for {scenario_id}: "
-                f"expected {total_points}, got {len(explicit)}"
-            )
-        return explicit
-
-    scenario_rule_ids = scenario_rule_map.get(scenario_id, [])
-    if len(scenario_rule_ids) == 1:
-        return [scenario_rule_ids[0]] * total_points
-    if len(scenario_rule_ids) == 0:
-        return ["others"] * total_points
-    raise SystemExit(
-        f"Scenario {scenario_id} has multiple rule_ids but no point-level assignment"
-    )
+def _extract_rule_family_label(text: str) -> str:
+    match = re.match(r"\s*【([^】]+)】", text or "")
+    if not match:
+        return OTHER_RULE_FAMILY_LABEL
+    label = match.group(1).strip()
+    return label if label in RULE_FAMILY_LABELS else OTHER_RULE_FAMILY_LABEL
 
 
 def _build_batch_aggregate_metrics(
     results: list[dict[str, Any]],
-    *,
-    rule_order: list[str] | None = None,
 ) -> dict[str, Any]:
-    completed_results = [item for item in results if item.get("status") == "completed"]
-    completed_scores = [
-        float(item["normalized_scenario_score"])
-        for item in completed_results
-        if "normalized_scenario_score" in item
-    ]
-    binary_scores = [
-        float(item.get("binary_scenario_score", 0.0))
-        for item in completed_results
-    ]
     passed_all_count = sum(1 for item in results if item.get("passed_all") is True)
     sum_passed_subitems = sum(int(item.get("passed_count", 0)) for item in results)
     sum_total_subitems = sum(int(item.get("total_count", 0)) for item in results)
     total_count = len(results)
-    completed_count = len(completed_results)
 
-    dimension_totals: dict[str, dict[str, Any]] = {}
-    ordered_rule_ids = rule_order or []
-    for rule_id in ordered_rule_ids:
-        dimension_totals[rule_id] = {
+    dimension_totals: dict[str, dict[str, Any]] = {
+        label: {
             "earned_points": 0,
             "total_points": 0,
-            "completed_scenarios": 0,
         }
-    completed_scenarios_by_rule: dict[str, set[str]] = {
-        rule_id: set() for rule_id in ordered_rule_ids
+        for label in [*RULE_FAMILY_LABELS, OTHER_RULE_FAMILY_LABEL]
     }
     for item in results:
-        point_rule_ids = item.get("point_rule_ids", [])
-        point_passed = item.get("point_passed", [])
-        scenario_id = str(item.get("scenario_id", "")).strip()
-        if not isinstance(point_rule_ids, list) or not isinstance(point_passed, list):
-            continue
-        for idx, rule_id in enumerate(point_rule_ids):
-            if idx >= len(point_passed):
-                break
-            rule_key = str(rule_id).strip() or "others"
-            bucket = dimension_totals.setdefault(
-                rule_key,
-                {"earned_points": 0, "total_points": 0, "completed_scenarios": 0},
-            )
+        for point_result in item.get("point_results", []):
+            if not isinstance(point_result, dict):
+                continue
+            rule_label = point_result.get("rule_label")
+            if rule_label not in dimension_totals:
+                continue
+            bucket = dimension_totals[rule_label]
             bucket["total_points"] += 1
-            if bool(point_passed[idx]):
+            if point_result.get("passed") is True:
                 bucket["earned_points"] += 1
-            if item.get("status") == "completed" and scenario_id:
-                completed_scenarios_by_rule.setdefault(rule_key, set()).add(scenario_id)
 
-    rule_dimension_scores: dict[str, Any] = {}
-    for rule_id, bucket in dimension_totals.items():
+    rule_family_scores: dict[str, Any] = {}
+    for rule_label, bucket in dimension_totals.items():
         total_points = int(bucket["total_points"])
         if total_points <= 0:
             continue
-        bucket["completed_scenarios"] = len(completed_scenarios_by_rule.get(rule_id, set()))
-        rule_dimension_scores[rule_id] = {
-            **bucket,
+        rule_family_scores[rule_label] = {
+            "earned": int(bucket["earned_points"]),
+            "total": total_points,
             "score": round(bucket["earned_points"] / total_points, 6),
         }
 
-    # 批量评分（两种）：(1) 整题全对计 1 否则 0 → 对的题数/总题数；(2) 所有小项计分 → 对的小项数/小项总数。
     batch_all_correct_rate = round(passed_all_count / total_count, 6) if total_count else None
     batch_subitem_rate = (
         round(sum_passed_subitems / sum_total_subitems, 6)
@@ -176,24 +95,6 @@ def _build_batch_aggregate_metrics(
         else None
     )
     return {
-        "avg_completed_score": round(
-            sum(completed_scores) / completed_count, 6
-        )
-        if completed_count
-        else None,
-        "avg_all_score": round(sum(completed_scores) / total_count, 6)
-        if total_count
-        else None,
-        "sum_completed_score": round(sum(completed_scores), 6),
-        "avg_completed_binary_score": round(
-            sum(binary_scores) / completed_count, 6
-        )
-        if completed_count
-        else None,
-        "avg_all_binary_score": round(sum(binary_scores) / total_count, 6)
-        if total_count
-        else None,
-        "sum_completed_binary_score": round(sum(binary_scores), 6),
         "batch_all_correct": {
             "earned": passed_all_count,
             "total": total_count,
@@ -204,9 +105,7 @@ def _build_batch_aggregate_metrics(
             "total": sum_total_subitems,
             "rate": batch_subitem_rate,
         },
-        "passed_all_count": passed_all_count,
-        "passed_all_rate_completed": batch_all_correct_rate,
-        "rule_dimension_scores": rule_dimension_scores,
+        "rule_family_scores": rule_family_scores,
     }
 
 
@@ -232,23 +131,13 @@ def _summary_entry_for_result(
     result: dict[str, Any],
     scenario_path: Path,
     output_path: Path,
-    scenario_rule_map: dict[str, list[str]],
-    explicit_point_rule_map: dict[str, list[str]],
 ) -> dict[str, Any]:
-    rule_ids = scenario_rule_map.get(result["scenario_id"], [])
-    scenario_total_points = len(load_scenario(scenario_path).raw.get("implicit_eval_points", []))
-    point_rule_ids = _resolve_point_rule_ids(
-        scenario_id=result["scenario_id"],
-        total_points=scenario_total_points,
-        scenario_rule_map=scenario_rule_map,
-        explicit_point_rule_map=explicit_point_rule_map,
-    )
+    scenario = load_scenario(scenario_path)
+    raw_points = scenario.raw.get("implicit_eval_points", [])
+    scenario_total_points = len(raw_points) if isinstance(raw_points, list) else 0
     if result["status"] == "completed":
         eval_summary = result["evaluation"]["summary"]
         evaluation_results = result["evaluation"].get("evaluation_results", [])
-        point_passed = [
-            bool(item.get("passed", False)) for item in evaluation_results if isinstance(item, dict)
-        ]
         passed_count = int(eval_summary.get("passed_count", 0))
         total_points = int(eval_summary.get("total_count", 0))
         binary = float(
@@ -257,31 +146,49 @@ def _summary_entry_for_result(
                 _binary_scenario_score(passed_count, total_points),
             )
         )
+        point_results: list[dict[str, Any]] = []
+        if isinstance(raw_points, list):
+            for idx, point_text in enumerate(raw_points):
+                passed = False
+                if idx < len(evaluation_results) and isinstance(evaluation_results[idx], dict):
+                    passed = bool(evaluation_results[idx].get("passed", False))
+                point_results.append(
+                    {
+                        "rule_label": _extract_rule_family_label(str(point_text)),
+                        "passed": passed,
+                    }
+                )
         return {
             "scenario_path": str(scenario_path),
             "scenario_id": result["scenario_id"],
             "status": "completed",
             "output_path": str(output_path),
-            "rule_ids": rule_ids,
             "normalized_scenario_score": eval_summary["normalized_scenario_score"],
             "binary_scenario_score": binary,
             "passed_all": eval_summary["passed_all"],
             "passed_count": passed_count,
             "total_count": total_points,
-            "point_rule_ids": point_rule_ids,
-            "point_passed": point_passed,
+            "point_results": point_results,
         }
     return {
         "scenario_path": str(scenario_path),
         "scenario_id": result["scenario_id"],
         "status": "failed",
         "output_path": str(output_path),
-        "rule_ids": rule_ids,
         "passed_all": False,
         "passed_count": 0,
         "total_count": scenario_total_points,
-        "point_rule_ids": point_rule_ids,
-        "point_passed": [False] * scenario_total_points,
+        "point_results": (
+            [
+                {
+                    "rule_label": _extract_rule_family_label(str(point_text)),
+                    "passed": False,
+                }
+                for point_text in raw_points
+            ]
+            if isinstance(raw_points, list)
+            else []
+        ),
         "error": result.get("error", "Unknown error"),
     }
 
@@ -292,7 +199,6 @@ def _build_batch_summary(
     scenario_dir: str,
     scenario_manifest: str | None,
     batch_output_dir: Path,
-    rule_order: list[str],
 ) -> dict[str, Any]:
     completed_count = sum(1 for item in results if item.get("status") == "completed")
     failed_count = sum(1 for item in results if item.get("status") == "failed")
@@ -306,7 +212,7 @@ def _build_batch_summary(
         "failed_scenarios": failed_count,
         "results": results,
     }
-    summary.update(_build_batch_aggregate_metrics(results, rule_order=rule_order))
+    summary.update(_build_batch_aggregate_metrics(results))
     return summary
 
 
@@ -502,7 +408,6 @@ def main() -> None:
 
     scenario_dir = Path(args.scenario_dir)
     manifest_path = _resolve_scenario_manifest_path(scenario_dir, args.scenario_manifest)
-    rule_order, scenario_rule_map, explicit_point_rule_map = _load_rule_family_metadata(scenario_dir)
     if args.rerun_from_summary:
         source_summary_path = Path(args.rerun_from_summary)
         source_summary = _load_existing_batch_summary(source_summary_path)
@@ -555,8 +460,6 @@ def main() -> None:
                 result=result,
                 scenario_path=scenario_path,
                 output_path=output_path,
-                scenario_rule_map=scenario_rule_map,
-                explicit_point_rule_map=explicit_point_rule_map,
             )
             if result["status"] == "completed":
                 print(
@@ -583,7 +486,6 @@ def main() -> None:
                 else None
             ),
             batch_output_dir=batch_output_dir,
-            rule_order=rule_order,
         )
         summary_path = batch_output_dir / "_summary.json"
         _write_json(summary_path, summary)
@@ -618,8 +520,6 @@ def main() -> None:
                 result=result,
                 scenario_path=scenario_path,
                 output_path=output_path,
-                scenario_rule_map=scenario_rule_map,
-                explicit_point_rule_map=explicit_point_rule_map,
             )
         )
         if result["status"] == "completed":
@@ -638,7 +538,6 @@ def main() -> None:
         scenario_dir=str(scenario_dir),
         scenario_manifest=str(manifest_path) if manifest_path is not None else None,
         batch_output_dir=batch_output_dir,
-        rule_order=rule_order,
     )
     summary_path = batch_output_dir / "_summary.json"
     _write_json(summary_path, summary)
@@ -647,7 +546,7 @@ def main() -> None:
 
 
 def _print_batch_score_line(summary: dict[str, Any]) -> None:
-    """在 stderr 打印两种批量得分：整题 0/1 累计、小项累计。"""
+    """在 stderr 打印简化后的批量得分摘要。"""
     bac = summary.get("batch_all_correct")
     bsub = summary.get("batch_subitems")
     if not isinstance(bac, dict) or not isinstance(bsub, dict):
@@ -673,6 +572,19 @@ def _print_batch_score_line(summary: dict[str, Any]) -> None:
         "[batch scores] " f"整题全对 {earned_ac}/{total_ac} (= {rate_ac}); " + sub_part,
         file=sys.stderr,
     )
+    rule_scores = summary.get("rule_family_scores")
+    if not isinstance(rule_scores, dict):
+        return
+    parts: list[str] = []
+    for label in [*RULE_FAMILY_LABELS, OTHER_RULE_FAMILY_LABEL]:
+        bucket = rule_scores.get(label)
+        if not isinstance(bucket, dict):
+            continue
+        parts.append(
+            f"{label} {bucket.get('earned')}/{bucket.get('total')} (= {bucket.get('score')})"
+        )
+    if parts:
+        print("[rule scores] " + "; ".join(parts), file=sys.stderr)
 
 
 def _run_single_scenario(
