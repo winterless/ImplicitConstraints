@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 from pathlib import Path
 import re
@@ -489,6 +490,7 @@ def main() -> None:
         )
         summary_path = batch_output_dir / "_summary.json"
         _write_json(summary_path, summary)
+        _write_batch_metrics_csv(batch_output_dir, summary)
         _print_batch_score_line(summary)
         print(json.dumps(summary, ensure_ascii=False, indent=2))
         return
@@ -541,6 +543,7 @@ def main() -> None:
     )
     summary_path = batch_output_dir / "_summary.json"
     _write_json(summary_path, summary)
+    _write_batch_metrics_csv(batch_output_dir, summary)
     _print_batch_score_line(summary)
     print(json.dumps(summary, ensure_ascii=False, indent=2))
 
@@ -785,6 +788,47 @@ def _batch_output_dir(output_dir: str | None) -> Path:
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _write_batch_metrics_csv(batch_output_dir: Path, summary: dict[str, Any]) -> Path:
+    csv_path = batch_output_dir / "batch_metrics.csv"
+    rule_scores = summary.get("rule_family_scores", {})
+    row: dict[str, Any] = {
+        "output_dir": summary.get("output_dir"),
+        "total_scenarios": summary.get("total_scenarios"),
+        "completed_scenarios": summary.get("completed_scenarios"),
+        "failed_scenarios": summary.get("failed_scenarios"),
+        "batch_all_correct_rate": (
+            summary.get("batch_all_correct", {}).get("rate")
+            if isinstance(summary.get("batch_all_correct"), dict)
+            else None
+        ),
+        "batch_subitems_rate": (
+            summary.get("batch_subitems", {}).get("rate")
+            if isinstance(summary.get("batch_subitems"), dict)
+            else None
+        ),
+    }
+    for label in [*RULE_FAMILY_LABELS, OTHER_RULE_FAMILY_LABEL]:
+        bucket = rule_scores.get(label)
+        row[label] = bucket.get("score") if isinstance(bucket, dict) else None
+
+    fieldnames = [
+        "output_dir",
+        "total_scenarios",
+        "completed_scenarios",
+        "failed_scenarios",
+        "batch_all_correct_rate",
+        "batch_subitems_rate",
+        *RULE_FAMILY_LABELS,
+        OTHER_RULE_FAMILY_LABEL,
+    ]
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
+    with csv_path.open("w", encoding="utf-8-sig", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerow(row)
+    return csv_path
 
 
 def _build_agent(config: RoleRuntimeConfig, api_key: str) -> BaseAgent:
