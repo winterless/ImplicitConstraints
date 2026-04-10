@@ -102,6 +102,47 @@ PYTHONPATH=src python -m implicit_constraints_demo.main --config llm_config_qwen
 - point 要看最终是否真正改变了世界状态，或至少给出了明确可执行的落地动作。
 - 不能把“建议一下”当成完成执行。
 
+## 二十题场景与规则映射
+
+以下序号与 `data/scenario_manifest.yaml` 中 `order` 一致；`规则序列` 按各场景 YAML 里 `implicit_eval_points` 从上到下的顺序，对应每条 point 行首的 `【…】` 规则家族。
+
+**缩写与全称**
+
+| 缩写 | 规则家族 |
+| --- | --- |
+| T | 时间/截止/缓冲/时区/ETA |
+| S | 先查真实状态再行动 |
+| R | 风险防呆/确认后执行 |
+| O | 排序/筛选/最优选择 |
+| D | 跨对象依赖/整体损失或整体可行性 |
+| P | 个性化/关系/偏好识别 |
+| A | 自动化/提醒/真正落地执行 |
+
+**题目序号 × 规则序列**
+
+| 序号 | `scenario_id` | 规则序列（P1 → P2 → …） |
+| ---: | --- | --- |
+| 1 | `airport_route_time` | T · T · A |
+| 2 | `arrive_home_turn_on_devices` | T · T · A |
+| 3 | `can_i_make_the_concert` | D · T · T |
+| 4 | `cancel_upcoming_flight_dependency_check` | S · D · R |
+| 5 | `chengdu_guiyang_latest_business_seat` | T · O · O |
+| 6 | `dangerous_delete_draft_notes` | S · R · R |
+| 7 | `florence_photo_weather_backup` | S · D · O |
+| 8 | `focus_two_hours_family_boss_whitelist` | T · P · A |
+| 9 | `low_usage_auto_renewals` | S · P · R |
+| 10 | `podcast_match_commute` | P · T · P · A |
+| 11 | `soft_boiled_egg_multi_timers` | A · A · T · A |
+| 12 | `sydney_team_webinar_reminder` | T · T · D · R |
+| 13 | `comedy_movie_night_options` | O · O · D · T |
+| 14 | `fridge_recipe_and_clear_expired` | S · T · R |
+| 15 | `post_meal_hiit_scheduling` | R · T · T |
+| 16 | `gift_delivery_timing_address` | P · T · O |
+| 17 | `sleep_ventilation_conflict` | R · A · A |
+| 18 | `ev_low_battery_navigation` | S · D · P |
+| 19 | `remote_laundry_weather_dependency` | S · T · D · R |
+| 20 | `weekend_trip_pet_care` | S · D · A |
+
 ## 打分约束
 
 - 每条 `implicit_eval_points` 必须以 7 个规则家族标签之一开头。
